@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>[[ theme.display_name ]]</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --btn-color: [[ theme.primary_color ]];
+    --btn-hover: [[ theme.hover_color ]];
+    --font: 'Inter', sans-serif;
+  }
+
+  body {
+    font-family: var(--font);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    align-items: stretch;
+  }
+
+  /* ── FONDO ─────────────────────────────────────────── */
+  #bg-layer {
+    position: fixed; inset: 0; z-index: 0;
+    [% if theme.bg_type == 'color' and theme.bg_flat_color %]
+    background: [[ theme.bg_flat_color ]];
+    [% elif theme.bg_type == 'image' and theme.bg_image_base64 %]
+    background-image: url('[[ bg_image_url ]]');
+    background-size: cover;
+    background-position: center;
+    [% else %]
+    background: linear-gradient(135deg, [[ theme.bg_gradient_from ]] 0%, [[ theme.bg_gradient_to ]] 100%);
+    [% endif %]
+    opacity: [[ theme.bg_opacity ]];
+    transition: opacity 0.4s;
+  }
+  #bg-overlay {
+    position: fixed; inset: 0; z-index: 1;
+    background: rgba(160,152,140,0.35);
+  }
+
+  /* ── LAYOUT PRINCIPAL ──────────────────────────────── */
+  #main-screen {
+    position: relative; z-index: 2;
+    width: 100vw; height: 100vh;
+    display: flex;
+    align-items: center;
+    padding: 40px 5vw;
+    gap: 24px;
+  }
+
+  #main-screen.layout-left   { justify-content: flex-start; }
+  #main-screen.layout-center { justify-content: center; }
+  #main-screen.layout-right  { justify-content: flex-end; }
+
+  #main-screen.layout-left   #login-col  { order: 1; }
+  #main-screen.layout-left   #logos-col  { order: 2; }
+  #main-screen.layout-right  #login-col  { order: 2; }
+  #main-screen.layout-right  #logos-col  { order: 1; }
+  #main-screen.layout-center #login-col  { order: 1; }
+  #main-screen.layout-center #logos-col  { order: 2; }
+
+  /* ── COLUMNA FORMULARIO ────────────────────────────── */
+  #login-col {
+    display: flex;
+    align-items: stretch;
+    flex-shrink: 0;
+  }
+
+  #login-card {
+    width: 340px;
+    min-width: 300px;
+    border-radius: 18px;
+    padding: 42px 38px 32px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+    overflow: hidden;
+  }
+
+  #sys-name {
+    font-family: var(--font);
+    font-weight: 800;
+    font-size: 2rem;
+    line-height: 1.15;
+    color: #111;
+    margin-bottom: 8px;
+  }
+  #sys-subtitle {
+    font-family: var(--font);
+    font-size: 0.93rem;
+    color: #444;
+    margin-bottom: 36px;
+  }
+
+  .field-group { margin-bottom: 18px; }
+  .field-group label {
+    display: block;
+    font-family: var(--font);
+    font-size: 0.82rem;
+    color: #333;
+    margin-bottom: 6px;
+  }
+  .field-group input {
+    width: 100%;
+    padding: 10px 38px 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-family: var(--font);
+    font-size: 0.88rem;
+    background: rgba(245,244,242,0.9);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .field-group input:focus { border-color: var(--btn-color); }
+  .pwd-wrap { position: relative; }
+  .pwd-wrap input { padding-right: 40px; }
+  .eye-btn {
+    position: absolute; right: 10px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none; cursor: pointer;
+    color: #999; font-size: 1rem; padding: 0;
+  }
+
+  #forgot {
+    text-align: center;
+    font-family: var(--font);
+    font-size: 0.82rem;
+    color: #555;
+    cursor: pointer;
+    margin: 4px 0 20px;
+  }
+  #forgot:hover { text-decoration: underline; }
+
+  #btn-login {
+    width: 100%;
+    padding: 13px;
+    background: var(--btn-color);
+    color: #fff;
+    border: none;
+    border-radius: 30px;
+    font-family: var(--font);
+    font-weight: 700;
+    font-size: 0.88rem;
+    letter-spacing: 1.5px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    margin-bottom: 22px;
+  }
+  #btn-login:hover { background: var(--btn-hover); transform: translateY(-1px); }
+  #btn-login:active { transform: translateY(0); }
+
+  #privacy-link {
+    font-family: var(--font);
+    font-size: 0.82rem;
+    color: #555;
+    cursor: pointer;
+    text-decoration: underline;
+    display: block;
+  }
+  #privacy-link:hover { color: var(--btn-color); }
+
+  /* ── COLUMNA LOGOS ─────────────────────────────────── */
+  #logos-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 60px;
+    padding: 40px 36px;
+    border-radius: 18px;
+    backdrop-filter: blur(2px);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+    overflow: hidden;
+  }
+
+  #logo-top-wrap {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .logo-placeholder {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 12px 20px;
+  }
+  .shield-svg { width: 72px; height: 82px; flex-shrink: 0; }
+  .gov-text-block { color: #fff; }
+  .gov-text-block .gov-label {
+    font-family: var(--font);
+    font-size: 0.72rem; font-weight: 600; letter-spacing: 1px;
+    opacity: 0.85; text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+  .gov-text-block .gov-title {
+    font-family: var(--font);
+    font-weight: 800; font-size: 1.6rem; line-height: 1.1;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  .divider-v {
+    width: 2px; height: 90px;
+    background: rgba(255,255,255,0.5);
+  }
+  .estado-badge {
+    display: flex; flex-direction: column; align-items: center;
+    color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,0.5);
+  }
+  .estado-badge .bird-icon { font-size: 2.8rem; color: #c0392b; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
+  .estado-badge .badge-mexico {
+    font-family: var(--font);
+    font-weight: 900; font-size: 1.5rem; color: #c0392b; letter-spacing: 1px;
+  }
+  .estado-badge .badge-slogan {
+    font-style: italic; font-size: 0.78rem; opacity: 0.9;
+  }
+
+  #logo-bottom-wrap { text-align: center; }
+  #logo-bottom-img  { max-height: 90px; max-width: 380px; object-fit: contain; }
+  .compramex-text {
+    font-family: var(--font);
+    font-size: 3.2rem; font-weight: 900; letter-spacing: 2px;
+    text-shadow: 0 3px 16px rgba(0,0,0,0.35);
+  }
+  .compramex-text .c-dark { color: #2c2c2c; }
+  .compramex-text .c-gold { color: #c8963a; }
+  .compramex-sub {
+    font-family: var(--font);
+    color: #c8963a; font-size: 0.9rem; letter-spacing: 2px;
+    border-top: 1px solid #c8963a;
+    padding-top: 6px; margin-top: 4px; text-align: center;
+  }
+
+  /* ── MODAL PDF ─────────────────────────────────────── */
+  #pdf-modal {
+    display: none; position: fixed; inset: 0; z-index: 900;
+    background: rgba(0,0,0,0.7);
+    align-items: center; justify-content: center;
+  }
+  #pdf-modal.open { display: flex; }
+  #pdf-modal-box {
+    background: #fff; border-radius: 14px;
+    width: 80vw; height: 85vh;
+    display: flex; flex-direction: column;
+    overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  }
+  #pdf-modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; background: var(--btn-color); color: #fff;
+    font-family: var(--font); font-weight: 700; font-size: 0.95rem;
+  }
+  #pdf-modal-header button {
+    background: none; border: none; color: #fff;
+    font-size: 1.4rem; cursor: pointer; line-height: 1;
+  }
+  #pdf-modal-body { flex: 1; overflow: hidden; }
+  #pdf-modal-body iframe, #pdf-modal-body embed { width: 100%; height: 100%; border: none; }
+  #pdf-no-file {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 100%; gap: 16px; color: #666; font-size: 0.95rem;
+  }
+  #pdf-no-file .pdf-icon { font-size: 3rem; }
+</style>
+</head>
+<body>
+
+<!-- Fondo -->
+<div id="bg-layer"></div>
+<div id="bg-overlay"></div>
+
+<!-- ── PANTALLA PRINCIPAL ───────────────────────────────── -->
+<div id="main-screen" class="layout-[[ theme.layout_position ]]">
+
+  <!-- COLUMNA FORMULARIO -->
+  <div id="login-col">
+    <div id="login-card" style="background: rgba([[ theme.card_bg_color | hex_to_rgb ]], [[ theme.form_opacity ]]);[% if theme.form_height_pct %] height: [[ theme.form_height_pct ]]vh;[% endif %]">
+      <div id="sys-name" style="text-align: [[ theme.name_align ]]">[[ theme.system_name ]]</div>
+      <div id="sys-subtitle" style="text-align: [[ theme.subtitle_align ]]">[[ theme.system_subtitle ]]</div>
+
+      <form action="{{ url_for('authentik_stages_password:login') | default('#') }}" method="POST">
+        {% if csrf_token %}
+        <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+        {% endif %}
+
+        <div class="field-group">
+          <label>Usuario / Correo electrónico</label>
+          <input type="text" name="uid" id="inp-user" autocomplete="username" required>
+        </div>
+
+        <div class="field-group">
+          <label>Contraseña</label>
+          <div class="pwd-wrap">
+            <input type="password" name="password" id="inp-pwd" autocomplete="current-password" required>
+            <button type="button" class="eye-btn" onclick="togglePwd()" title="Mostrar/ocultar">👁</button>
+          </div>
+        </div>
+
+        <div id="forgot" onclick="window.location.href='/recovery/'">¿Olvidaste tu contraseña?</div>
+        <button type="submit" id="btn-login">INICIAR SESIÓN</button>
+      </form>
+
+      <span id="privacy-link" style="text-align: [[ theme.privacy_align ]]" onclick="openPdf()">Privacidad</span>
+    </div>
+  </div>
+
+  <!-- COLUMNA LOGOS -->
+  <div id="logos-col" style="background: rgba([[ theme.panel_bg_color | hex_to_rgb ]], [[ theme.logos_opacity ]]);[% if theme.logos_height_pct %] height: [[ theme.logos_height_pct ]]vh;[% endif %]">
+    <!-- Logo superior -->
+    <div id="logo-top-wrap">
+      [% if theme.logo_top_base64 %]
+      <img id="logo-top-img" src="[[ logo_top_url ]]" alt="Logo superior" style="max-height:110px; max-width:380px; object-fit:contain;">
+      [% else %]
+      <div id="logo-top-default" class="logo-placeholder">
+        <svg class="shield-svg" viewBox="0 0 72 82" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M36 2 L70 16 L70 46 C70 64 36 80 36 80 C36 80 2 64 2 46 L2 16 Z" fill="#c8a05a" stroke="#8B6914" stroke-width="2"/>
+          <path d="M36 8 L64 20 L64 45 C64 61 36 75 36 75 C36 75 8 61 8 45 L8 20 Z" fill="#b08840"/>
+          <text x="36" y="36" text-anchor="middle" font-size="8" fill="#fff" font-family="serif" font-weight="bold">GEM</text>
+          <text x="36" y="48" text-anchor="middle" font-size="5.5" fill="#fff" font-family="serif">TOLUCA</text>
+        </svg>
+        <div class="gov-text-block">
+          <div class="gov-label">GOBIERNO DEL</div>
+          <div class="gov-title">ESTADO DE<br>MÉXICO</div>
+        </div>
+        <div class="divider-v"></div>
+        <div class="estado-badge">
+          <div class="bird-icon">🦅</div>
+          <div class="badge-mexico">MÉXICO</div>
+          <div class="badge-slogan">¡El poder de servir!</div>
+        </div>
+      </div>
+      [% endif %]
+    </div>
+
+    <!-- Logo inferior -->
+    <div id="logo-bottom-wrap">
+      [% if theme.logo_bottom_base64 %]
+      <img id="logo-bottom-img" src="[[ logo_bottom_url ]]" alt="Logo inferior" style="max-height:90px; max-width:380px; object-fit:contain;">
+      [% else %]
+      <div id="logo-bottom-default">
+        <div class="compramex-text">
+          <span class="c-dark">COMPRA</span><span class="c-gold">MEX</span>
+        </div>
+        <div class="compramex-sub">Portal Público de Compras</div>
+      </div>
+      [% endif %]
+    </div>
+  </div>
+
+</div><!-- /main-screen -->
+
+<!-- ── MODAL PDF ────────────────────────────────────────── -->
+<div id="pdf-modal">
+  <div id="pdf-modal-box">
+    <div id="pdf-modal-header">
+      <span>Aviso de Privacidad</span>
+      <button onclick="closePdf()">✕</button>
+    </div>
+    <div id="pdf-modal-body">
+      <div id="pdf-no-file">
+        <div class="pdf-icon">📄</div>
+        <p>No se ha cargado ningún documento de privacidad.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const privacyPdfUrl = [[ theme.privacy_pdf_url | tojson ]];
+
+  function togglePwd() {
+    const input = document.getElementById('inp-pwd');
+    input.type = input.type === 'password' ? 'text' : 'password';
+  }
+
+  function openPdf() {
+    document.getElementById('pdf-modal').classList.add('open');
+    const body = document.getElementById('pdf-modal-body');
+    if (privacyPdfUrl) {
+      body.innerHTML = `<embed src="${privacyPdfUrl}#toolbar=1&navpanes=0" type="application/pdf" width="100%" height="100%">`;
+    } else {
+      body.innerHTML = `<div id="pdf-no-file"><div class="pdf-icon">📄</div><p>No se ha cargado ningún documento de privacidad.</p></div>`;
+    }
+  }
+
+  function closePdf() {
+    document.getElementById('pdf-modal').classList.remove('open');
+    document.getElementById('pdf-modal-body').innerHTML = '';
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closePdf(); });
+</script>
+</body>
+</html>

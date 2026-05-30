@@ -1,0 +1,115 @@
+import uuid
+from datetime import datetime
+from typing import Optional, Literal
+from pydantic import BaseModel, Field, field_validator, ConfigDict
+
+HEX_COLOR_REGEX = r"^#[0-9a-fA-F]{6}$"
+
+class ThemeBase(BaseModel):
+    display_name: str = Field(..., max_length=150)
+    system_name: str = Field("CASMARTS<br>Core", max_length=150)
+    system_subtitle: str = Field("Gobierno del estado de México", max_length=255)
+    layout_position: Literal["left", "center", "right"] = "left"
+    name_align: Literal["left", "center", "right"] = "center"
+    subtitle_align: Literal["left", "center", "right"] = "center"
+    privacy_align: Literal["left", "center", "right"] = "center"
+    primary_color: str = Field("#8B3A2A", pattern=HEX_COLOR_REGEX)
+    hover_color: str = Field("#a04535", pattern=HEX_COLOR_REGEX)
+    card_bg_color: str = Field("#FFFFFF", pattern=HEX_COLOR_REGEX)
+    panel_bg_color: str = Field("#F6F9FD", pattern=HEX_COLOR_REGEX)
+    bg_type: Literal["gradient", "color", "image"] = "gradient"
+    bg_flat_color: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    bg_gradient_from: str = Field("#c8c4bc", pattern=HEX_COLOR_REGEX)
+    bg_gradient_to: str = Field("#a09890", pattern=HEX_COLOR_REGEX)
+    bg_opacity: float = Field(1.0, ge=0.0, le=1.0)
+    form_opacity: float = Field(0.55, ge=0.0, le=1.0)
+    form_height_pct: Optional[int] = Field(None, ge=0, le=100)
+    logos_opacity: float = Field(0.55, ge=0.0, le=1.0)
+    logos_height_pct: Optional[int] = Field(None, ge=0, le=100)
+    privacy_pdf_url: Optional[str] = Field(None, max_length=512)
+    authentik_app_slug: Optional[str] = Field(None, max_length=100)
+    is_active: bool = True
+
+    @field_validator("system_name", mode="after")
+    @classmethod
+    def sanitize_system_name(cls, v: str) -> str:
+        # Prevent arbitrary dangerous script tags, keep basic visual layout tags
+        # Basic sanitization
+        for bad in ["<script", "javascript:", "onload", "onerror", "<iframe>"]:
+            if bad in v.lower():
+                raise ValueError(f"Dangerous content detected in system_name: {bad}")
+        return v
+
+class ThemeCreate(ThemeBase):
+    authentik_flow_slug: str = Field(..., max_length=100)
+    logo_top_base64: Optional[str] = None
+    logo_bottom_base64: Optional[str] = None
+    bg_image_base64: Optional[str] = None
+
+class ThemeUpdate(BaseModel):
+    authentik_app_slug: Optional[str] = Field(None, max_length=100)
+    display_name: Optional[str] = Field(None, max_length=150)
+    system_name: Optional[str] = Field(None, max_length=150)
+    system_subtitle: Optional[str] = Field(None, max_length=255)
+    layout_position: Optional[Literal["left", "center", "right"]] = None
+    name_align: Optional[Literal["left", "center", "right"]] = None
+    subtitle_align: Optional[Literal["left", "center", "right"]] = None
+    privacy_align: Optional[Literal["left", "center", "right"]] = None
+    primary_color: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    hover_color: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    card_bg_color: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    panel_bg_color: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    bg_type: Optional[Literal["gradient", "color", "image"]] = None
+    bg_flat_color: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    bg_gradient_from: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    bg_gradient_to: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    bg_opacity: Optional[float] = Field(None, ge=0.0, le=1.0)
+    form_opacity: Optional[float] = Field(None, ge=0.0, le=1.0)
+    form_height_pct: Optional[int] = Field(None, ge=0, le=100)
+    logos_opacity: Optional[float] = Field(None, ge=0.0, le=1.0)
+    logos_height_pct: Optional[int] = Field(None, ge=0, le=100)
+    privacy_pdf_url: Optional[str] = Field(None, max_length=512)
+    logo_top_base64: Optional[str] = None
+    logo_bottom_base64: Optional[str] = None
+    bg_image_base64: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class ThemeResponse(ThemeBase):
+    id: uuid.UUID
+    authentik_flow_slug: str
+    logo_top_base64: Optional[str] = None
+    logo_bottom_base64: Optional[str] = None
+    bg_image_base64: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ThemePublic(BaseModel):
+    display_name: str
+    system_name: str
+    system_subtitle: str
+    layout_position: str
+    name_align: str
+    subtitle_align: str
+    privacy_align: str
+    primary_color: str
+    hover_color: str
+    card_bg_color: str
+    panel_bg_color: str
+    bg_type: str
+    bg_flat_color: Optional[str] = None
+    bg_gradient_from: str
+    bg_gradient_to: str
+    bg_opacity: float
+    form_opacity: float
+    form_height_pct: Optional[int] = None
+    logos_opacity: float
+    logos_height_pct: Optional[int] = None
+    privacy_pdf_url: Optional[str] = None
+    authentik_app_slug: Optional[str] = None
+    has_logo_top: bool
+    has_logo_bottom: bool
+    has_bg_image: bool
+
+    model_config = ConfigDict(from_attributes=True)

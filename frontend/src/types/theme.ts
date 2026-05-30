@@ -1,0 +1,32 @@
+export interface Theme {
+  id?: string;
+  authentik_flow_slug: string;
+  authentik_app_slug?: string | null;
+  display_name: string;
+  system_name: string;
+  system_subtitle: string;
+  layout_position: 'left' | 'center' | 'right';
+  name_align: 'left' | 'center' | 'right';
+  subtitle_align: 'left' | 'center' | 'right';
+  privacy_align: 'left' | 'center' | 'right';
+  primary_color: string;
+  hover_color: string;
+  card_bg_color: string;
+  panel_bg_color: string;
+  bg_type: 'gradient' | 'color' | 'image';
+  bg_flat_color: string | null;
+  bg_gradient_from: string;
+  bg_gradient_to: string;
+  bg_image_base64: string | null;
+  bg_opacity: number;
+  form_opacity: number;
+  form_height_pct: number | null;
+  logos_opacity: number;
+  logos_height_pct: number | null;
+  logo_top_base64: string | null;
+  logo_bottom_base64: string | null;
+  privacy_pdf_url: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}

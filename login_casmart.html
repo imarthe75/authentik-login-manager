@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login - Sistema GEM</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --btn-color: #8B3A2A;
+    --btn-hover: #a04535;
+    --font: 'Inter', sans-serif;
+  }
+
+  body {
+    font-family: var(--font);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    align-items: stretch;
+  }
+
+  /* ── FONDO ─────────────────────────────────────────── */
+  #bg-layer {
+    position: fixed; inset: 0; z-index: 0;
+    background: linear-gradient(135deg, #c8c4bc 0%, #b0aba0 30%, #a09890 60%, #c0bab0 100%);
+    background-size: cover;
+    background-position: center;
+    filter: grayscale(30%);
+    transition: opacity 0.4s;
+  }
+  #bg-overlay {
+    position: fixed; inset: 0; z-index: 1;
+    background: rgba(160,152,140,0.35);
+  }
+
+  /* ── LAYOUT PRINCIPAL ──────────────────────────────── */
+  #main-screen {
+    position: relative; z-index: 2;
+    width: 100vw; height: 100vh;
+    display: flex;
+    align-items: center;
+    padding: 40px 5vw;
+    gap: 24px;
+    transition: justify-content 0.35s;
+  }
+
+  /* Posición del layout: formulario + logos */
+  #main-screen.layout-left   { justify-content: flex-start; }
+  #main-screen.layout-center { justify-content: center; }
+  #main-screen.layout-right  { justify-content: flex-end; }
+
+  /* Orden de columnas según posición */
+  #main-screen.layout-left   #login-col  { order: 1; }
+  #main-screen.layout-left   #logos-col  { order: 2; }
+  #main-screen.layout-right  #login-col  { order: 2; }
+  #main-screen.layout-right  #logos-col  { order: 1; }
+  #main-screen.layout-center #login-col  { order: 1; }
+  #main-screen.layout-center #logos-col  { order: 2; }
+
+  /* ── COLUMNA FORMULARIO ────────────────────────────── */
+  #login-col {
+    display: flex;
+    align-items: stretch;
+    flex-shrink: 0;
+  }
+
+  #login-card {
+    width: 340px;
+    min-width: 300px;
+    background: rgba(255,255,255,0.55);
+    border-radius: 18px;
+    padding: 42px 38px 32px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+    transition: background 0.3s, height 0.3s;
+    overflow: hidden;
+  }
+
+  #sys-name {
+    font-family: var(--font);
+    font-weight: 800;
+    font-size: 2rem;
+    line-height: 1.15;
+    color: #111;
+    text-align: center;
+    margin-bottom: 8px;
+    transition: text-align 0.2s;
+  }
+  #sys-subtitle {
+    font-family: var(--font);
+    font-size: 0.93rem;
+    color: #444;
+    text-align: center;
+    margin-bottom: 36px;
+    transition: text-align 0.2s;
+  }
+
+  .field-group { margin-bottom: 18px; }
+  .field-group label {
+    display: block;
+    font-family: var(--font);
+    font-size: 0.82rem;
+    color: #333;
+    margin-bottom: 6px;
+  }
+  .field-group input {
+    width: 100%;
+    padding: 10px 38px 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-family: var(--font);
+    font-size: 0.88rem;
+    background: rgba(245,244,242,0.9);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .field-group input:focus { border-color: #8B3A2A; }
+  .pwd-wrap { position: relative; }
+  .pwd-wrap input { padding-right: 40px; }
+  .eye-btn {
+    position: absolute; right: 10px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none; cursor: pointer;
+    color: #999; font-size: 1rem; padding: 0;
+  }
+
+  #forgot {
+    text-align: center;
+    font-family: var(--font);
+    font-size: 0.82rem;
+    color: #555;
+    cursor: pointer;
+    margin: 4px 0 20px;
+  }
+  #forgot:hover { text-decoration: underline; }
+
+  #btn-login {
+    width: 100%;
+    padding: 13px;
+    background: var(--btn-color);
+    color: #fff;
+    border: none;
+    border-radius: 30px;
+    font-family: var(--font);
+    font-weight: 700;
+    font-size: 0.88rem;
+    letter-spacing: 1.5px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    margin-bottom: 22px;
+  }
+  #btn-login:hover { background: var(--btn-hover); transform: translateY(-1px); }
+  #btn-login:active { transform: translateY(0); }
+
+  #privacy-link {
+    font-family: var(--font);
+    font-size: 0.82rem;
+    color: #555;
+    cursor: pointer;
+    text-decoration: underline;
+    display: block;
+    text-align: center;
+    transition: text-align 0.2s;
+  }
+  #privacy-link:hover { color: #8B3A2A; }
+
+  /* ── COLUMNA LOGOS ─────────────────────────────────── */
+  #logos-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 60px;
+    padding: 40px 36px;
+    background: rgba(255,255,255,0.55);
+    border-radius: 18px;
+    backdrop-filter: blur(2px);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+    transition: background 0.3s, height 0.3s;
+    overflow: hidden;
+  }
+
+  #logo-top-wrap {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .logo-placeholder {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 12px 20px;
+  }
+  .shield-svg { width: 72px; height: 82px; flex-shrink: 0; }
+  .gov-text-block { color: #fff; }
+  .gov-text-block .gov-label {
+    font-family: var(--font);
+    font-size: 0.72rem; font-weight: 600; letter-spacing: 1px;
+    opacity: 0.85; text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+  .gov-text-block .gov-title {
+    font-family: var(--font);
+    font-weight: 800; font-size: 1.6rem; line-height: 1.1;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  .divider-v {
+    width: 2px; height: 90px;
+    background: rgba(255,255,255,0.5);
+  }
+  .estado-badge {
+    display: flex; flex-direction: column; align-items: center;
+    color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,0.5);
+  }
+  .estado-badge .bird-icon { font-size: 2.8rem; color: #c0392b; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
+  .estado-badge .badge-mexico {
+    font-family: var(--font);
+    font-weight: 900; font-size: 1.5rem; color: #c0392b; letter-spacing: 1px;
+  }
+  .estado-badge .badge-slogan {
+    font-style: italic; font-size: 0.78rem; opacity: 0.9;
+  }
+
+  #logo-bottom-wrap { text-align: center; }
+  #logo-bottom-img  { max-height: 90px; max-width: 380px; object-fit: contain; }
+  .compramex-text {
+    font-family: var(--font);
+    font-size: 3.2rem; font-weight: 900; letter-spacing: 2px;
+    text-shadow: 0 3px 16px rgba(0,0,0,0.35);
+  }
+  .compramex-text .c-dark { color: #2c2c2c; }
+  .compramex-text .c-gold { color: #c8963a; }
+  .compramex-sub {
+    font-family: var(--font);
+    color: #c8963a; font-size: 0.9rem; letter-spacing: 2px;
+    border-top: 1px solid #c8963a;
+    padding-top: 6px; margin-top: 4px; text-align: center;
+  }
+
+  /* ── MODAL PDF ─────────────────────────────────────── */
+  #pdf-modal {
+    display: none; position: fixed; inset: 0; z-index: 900;
+    background: rgba(0,0,0,0.7);
+    align-items: center; justify-content: center;
+  }
+  #pdf-modal.open { display: flex; }
+  #pdf-modal-box {
+    background: #fff; border-radius: 14px;
+    width: 80vw; height: 85vh;
+    display: flex; flex-direction: column;
+    overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  }
+  #pdf-modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; background: #8B3A2A; color: #fff;
+    font-family: var(--font); font-weight: 700; font-size: 0.95rem;
+  }
+  #pdf-modal-header button {
+    background: none; border: none; color: #fff;
+    font-size: 1.4rem; cursor: pointer; line-height: 1;
+  }
+  #pdf-modal-body { flex: 1; overflow: hidden; }
+  #pdf-modal-body iframe, #pdf-modal-body embed { width: 100%; height: 100%; border: none; }
+  #pdf-no-file {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 100%; gap: 16px; color: #666; font-size: 0.95rem;
+  }
+  #pdf-no-file .pdf-icon { font-size: 3rem; }
+
+  /* ── BOTÓN + PANEL CONFIGURACIÓN ───────────────────── */
+  #config-toggle {
+    position: fixed; top: 50%; right: 0;
+    transform: translateY(-50%);
+    z-index: 500;
+    background: #8B3A2A; color: #fff;
+    border: none; border-radius: 10px 0 0 10px;
+    width: 38px; height: 48px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: right 0.35s, background 0.2s;
+    box-shadow: -3px 0 14px rgba(0,0,0,0.2);
+  }
+  #config-toggle:hover { background: #a04535; }
+  #config-toggle svg { display: block; flex-shrink: 0; }
+
+  #config-panel {
+    position: fixed; top: 0; right: -390px; bottom: 0;
+    width: 370px; z-index: 490;
+    background: #f7f4f0; border-left: 2px solid #ddd;
+    overflow-y: auto; overflow-x: hidden;
+    transition: right 0.35s cubic-bezier(.4,0,.2,1);
+    box-shadow: -6px 0 30px rgba(0,0,0,0.15);
+    padding-bottom: 30px;
+  }
+  #config-panel.open { right: 0; }
+
+  #config-panel-header {
+    background: #8B3A2A; color: #fff;
+    padding: 18px 20px;
+    font-family: var(--font); font-weight: 700; font-size: 0.95rem; letter-spacing: 1px;
+    position: sticky; top: 0; z-index: 1;
+  }
+
+  .cfg-section { padding: 16px 20px 10px; border-bottom: 1px solid #e0dbd4; }
+  .cfg-section:last-child { border-bottom: none; }
+  .cfg-section h3 {
+    font-family: var(--font); font-size: 0.75rem; font-weight: 700;
+    color: #8B3A2A; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 14px;
+  }
+
+  .cfg-row { margin-bottom: 12px; }
+  .cfg-row label {
+    display: block; font-family: var(--font); font-size: 0.8rem;
+    color: #444; margin-bottom: 5px; font-weight: 600;
+  }
+  .cfg-row input[type="text"] {
+    width: 100%; padding: 8px 10px;
+    border: 1px solid #ccc; border-radius: 7px;
+    font-family: var(--font); font-size: 0.83rem; background: #fff; outline: none;
+  }
+  .cfg-row input[type="text"]:focus { border-color: #8B3A2A; }
+  .cfg-row input[type="range"] { width: 100%; accent-color: #8B3A2A; cursor: pointer; }
+  .range-val { font-size: 0.78rem; color: #666; text-align: right; margin-top: 2px; }
+
+  /* Selector de alineación con botones */
+  .align-group {
+    display: flex; gap: 6px; margin-top: 4px;
+  }
+  .align-btn {
+    flex: 1; padding: 7px 4px;
+    background: #fff; border: 1.5px solid #ccc;
+    border-radius: 7px; cursor: pointer;
+    font-family: var(--font); font-size: 0.78rem; font-weight: 600; color: #666;
+    transition: all 0.15s;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  .align-btn svg { width: 18px; height: 14px; }
+  .align-btn:hover { border-color: #8B3A2A; color: #8B3A2A; }
+  .align-btn.active { background: #8B3A2A; border-color: #8B3A2A; color: #fff; }
+  .align-btn.active svg path { stroke: #fff; }
+
+  /* Selector layout */
+  .layout-group {
+    display: flex; gap: 6px; margin-top: 4px;
+  }
+  .layout-btn {
+    flex: 1; padding: 10px 4px 7px;
+    background: #fff; border: 1.5px solid #ccc;
+    border-radius: 7px; cursor: pointer;
+    font-family: var(--font); font-size: 0.72rem; font-weight: 600; color: #666;
+    transition: all 0.15s;
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+  }
+  .layout-btn:hover { border-color: #8B3A2A; color: #8B3A2A; }
+  .layout-btn.active { background: #8B3A2A; border-color: #8B3A2A; color: #fff; }
+
+  /* Mini diagrama layout */
+  .lyt-diagram {
+    width: 44px; height: 28px;
+    border: 1.5px solid currentColor;
+    border-radius: 4px;
+    display: flex; align-items: center;
+    padding: 3px; gap: 3px;
+    opacity: 0.8;
+  }
+  .lyt-form-block {
+    width: 14px; height: 100%;
+    background: currentColor; border-radius: 2px; flex-shrink: 0;
+    opacity: 0.9;
+  }
+  .lyt-logo-block {
+    flex: 1; height: 100%;
+    border: 1.5px solid currentColor; border-radius: 2px;
+    opacity: 0.5;
+  }
+  .lyt-spacer { flex: 1; }
+
+  .cfg-file-btn {
+    display: inline-block; padding: 8px 14px;
+    background: #fff; border: 1px solid #8B3A2A;
+    border-radius: 7px; color: #8B3A2A;
+    font-family: var(--font); font-size: 0.8rem; font-weight: 600;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .cfg-file-btn:hover { background: #f0e8e4; }
+  .cfg-file-hint { font-family: var(--font); font-size: 0.74rem; color: #888; margin-top: 4px; }
+
+  /* Tarjeta que agrupa campo + alineación */
+  .cfg-field-card {
+    background: #fff;
+    border: 1px solid #e4ddd6;
+    border-radius: 10px;
+    padding: 12px 12px 10px;
+    margin-bottom: 10px;
+  }
+  .cfg-field-card .cfg-row { margin-bottom: 8px; }
+  .cfg-field-card .cfg-row:last-child { margin-bottom: 0; }
+  .cfg-row-align label {
+    font-size: 0.74rem; color: #888; font-weight: 500; margin-bottom: 5px;
+  }
+
+  /* Paleta de colores botón */
+  .color-palette {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;
+  }
+  .color-swatch {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 3px solid transparent;
+    cursor: pointer; transition: transform 0.15s, border-color 0.15s;
+    position: relative;
+  }
+  .color-swatch:hover { transform: scale(1.15); }
+  .color-swatch.active {
+    border-color: #333;
+    box-shadow: 0 0 0 2px #fff inset;
+  }
+  .color-swatch.active::after {
+    content: '✓';
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 0.85rem; font-weight: 700;
+  }
+
+  .cfg-logo-preview {
+    width: 100%; height: 60px;
+    border: 1px dashed #ccc; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; color: #aaa;
+    margin-top: 8px; overflow: hidden; background: #fff;
+  }
+  .cfg-logo-preview img { max-height: 56px; max-width: 100%; object-fit: contain; }
+</style>
+</head>
+<body>
+
+<!-- Fondo -->
+<div id="bg-layer"></div>
+<div id="bg-overlay"></div>
+
+<!-- ── PANTALLA PRINCIPAL ───────────────────────────────── -->
+<div id="main-screen" class="layout-left">
+
+  <!-- COLUMNA FORMULARIO -->
+  <div id="login-col">
+    <div id="login-card">
+      <div id="sys-name">Nombre del<br>Sistema</div>
+      <div id="sys-subtitle">Gobierno del estado de México</div>
+
+      <div class="field-group">
+        <label>Usuario / Correo electrónico</label>
+        <input type="text" id="inp-user" autocomplete="username">
+      </div>
+
+      <div class="field-group">
+        <label>Contraseña</label>
+        <div class="pwd-wrap">
+          <input type="password" id="inp-pwd" autocomplete="current-password">
+          <button class="eye-btn" onclick="togglePwd()" title="Mostrar/ocultar">👁</button>
+        </div>
+      </div>
+
+      <div id="forgot">¿Olvidaste tu contraseña?</div>
+      <button id="btn-login">INICIAR SESION</button>
+      <span id="privacy-link" onclick="openPdf()">Privacidad</span>
+    </div>
+  </div>
+
+  <!-- COLUMNA LOGOS -->
+  <div id="logos-col">
+    <!-- Logo superior -->
+    <div id="logo-top-wrap">
+      <div id="logo-top-default" class="logo-placeholder">
+        <svg class="shield-svg" viewBox="0 0 72 82" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M36 2 L70 16 L70 46 C70 64 36 80 36 80 C36 80 2 64 2 46 L2 16 Z" fill="#c8a05a" stroke="#8B6914" stroke-width="2"/>
+          <path d="M36 8 L64 20 L64 45 C64 61 36 75 36 75 C36 75 8 61 8 45 L8 20 Z" fill="#b08840"/>
+          <text x="36" y="36" text-anchor="middle" font-size="8" fill="#fff" font-family="serif" font-weight="bold">GEM</text>
+          <text x="36" y="48" text-anchor="middle" font-size="5.5" fill="#fff" font-family="serif">TOLUCA</text>
+        </svg>
+        <div class="gov-text-block">
+          <div class="gov-label">GOBIERNO DEL</div>
+          <div class="gov-title">ESTADO DE<br>MÉXICO</div>
+        </div>
+        <div class="divider-v"></div>
+        <div class="estado-badge">
+          <div class="bird-icon">🦅</div>
+          <div class="badge-mexico">MÉXICO</div>
+          <div class="badge-slogan">¡El poder de servir!</div>
+        </div>
+      </div>
+      <img id="logo-top-img" src="" alt="Logo superior" style="display:none; max-height:110px; max-width:380px; object-fit:contain;">
+    </div>
+
+    <!-- Logo inferior -->
+    <div id="logo-bottom-wrap">
+      <div id="logo-bottom-default">
+        <div class="compramex-text">
+          <span class="c-dark">COMPRA</span><span class="c-gold">MEX</span>
+        </div>
+        <div class="compramex-sub">Portal Público de Compras</div>
+      </div>
+      <img id="logo-bottom-img" src="" alt="Logo inferior" style="display:none; max-height:90px; max-width:380px; object-fit:contain;">
+    </div>
+  </div>
+
+</div><!-- /main-screen -->
+
+<!-- ── MODAL PDF ────────────────────────────────────────── -->
+<div id="pdf-modal">
+  <div id="pdf-modal-box">
+    <div id="pdf-modal-header">
+      <span>Aviso de Privacidad</span>
+      <button onclick="closePdf()">✕</button>
+    </div>
+    <div id="pdf-modal-body">
+      <div id="pdf-no-file">
+        <div class="pdf-icon">📄</div>
+        <p>No se ha cargado ningún documento de privacidad.</p>
+        <p style="font-size:0.82rem;color:#aaa;">Configure el PDF en el panel lateral → "Aviso de Privacidad".</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── BOTÓN PANEL ───────────────────────────────────────── -->
+<button id="config-toggle" onclick="togglePanel()" title="Configurar">
+  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+</button>
+
+<!-- ── PANEL LATERAL ─────────────────────────────────────── -->
+<div id="config-panel">
+  <div id="config-panel-header">⚙ Panel de Configuración</div>
+
+  <!-- 1. DISTRIBUCIÓN GENERAL -->
+  <div class="cfg-section">
+    <h3>📐 Distribución del layout</h3>
+    <div class="cfg-row">
+      <label>Posición del formulario y logotipos</label>
+      <div class="layout-group">
+
+        <button class="layout-btn active" id="lyt-left" onclick="setLayout('left')">
+          <div class="lyt-diagram">
+            <div class="lyt-form-block"></div>
+            <div class="lyt-logo-block"></div>
+          </div>
+          Izquierda
+        </button>
+
+        <button class="layout-btn" id="lyt-center" onclick="setLayout('center')">
+          <div class="lyt-diagram" style="justify-content:center;">
+            <div class="lyt-spacer"></div>
+            <div class="lyt-form-block"></div>
+            <div class="lyt-logo-block"></div>
+            <div class="lyt-spacer"></div>
+          </div>
+          Centro
+        </button>
+
+        <button class="layout-btn" id="lyt-right" onclick="setLayout('right')">
+          <div class="lyt-diagram" style="flex-direction:row-reverse;">
+            <div class="lyt-form-block"></div>
+            <div class="lyt-logo-block"></div>
+          </div>
+          Derecha
+        </button>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. TEXTOS -->
+  <div class="cfg-section">
+    <h3>📝 Textos del sistema</h3>
+
+    <!-- Nombre del sistema -->
+    <div class="cfg-field-card">
+      <div class="cfg-row">
+        <label>Nombre del sistema</label>
+        <input type="text" id="cfg-sysname" value="Nombre del Sistema" oninput="applySysName()">
+      </div>
+      <div class="cfg-row cfg-row-align">
+        <label>Alineación</label>
+        <div class="align-group">
+          <button class="align-btn" id="align-name-left" onclick="setAlign('name','left')">
+            <svg viewBox="0 0 18 14"><path d="M1 2h16M1 7h10M1 12h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+            Izq
+          </button>
+          <button class="align-btn active" id="align-name-center" onclick="setAlign('name','center')">
+            <svg viewBox="0 0 18 14"><path d="M1 2h16M4 7h10M2.5 12h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+            Cen
+          </button>
+          <button class="align-btn" id="align-name-right" onclick="setAlign('name','right')">
+            <svg viewBox="0 0 18 14"><path d="M1 2h16M7 7h10M4 12h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+            Der
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Subtítulo -->
+    <div class="cfg-field-card">
+      <div class="cfg-row">
+        <label>Subtítulo</label>
+        <input type="text" id="cfg-subtitle" value="Gobierno del estado de México" oninput="applySubtitle()">
+      </div>
+      <div class="cfg-row cfg-row-align">
+        <label>Alineación</label>
+        <div class="align-group">
+          <button class="align-btn" id="align-sub-left" onclick="setAlign('sub','left')">
+            <svg viewBox="0 0 18 14"><path d="M1 2h16M1 7h10M1 12h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+            Izq
+          </button>
+          <button class="align-btn active" id="align-sub-center" onclick="setAlign('sub','center')">
+            <svg viewBox="0 0 18 14"><path d="M1 2h16M4 7h10M2.5 12h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+            Cen
+          </button>
+          <button class="align-btn" id="align-sub-right" onclick="setAlign('sub','right')">
+            <svg viewBox="0 0 18 14"><path d="M1 2h16M7 7h10M4 12h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+            Der
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 3. ENLACE PRIVACIDAD -->
+  <div class="cfg-section">
+    <h3>🔗 Enlace de Privacidad</h3>
+    <div class="cfg-row">
+      <label>Alineación del enlace</label>
+      <div class="align-group">
+        <button class="align-btn" id="align-priv-left"   onclick="setAlign('priv','left')">
+          <svg viewBox="0 0 18 14"><path d="M1 2h16M1 7h10M1 12h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+          Izq
+        </button>
+        <button class="align-btn active" id="align-priv-center" onclick="setAlign('priv','center')">
+          <svg viewBox="0 0 18 14"><path d="M1 2h16M4 7h10M2.5 12h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+          Cen
+        </button>
+        <button class="align-btn" id="align-priv-right"  onclick="setAlign('priv','right')">
+          <svg viewBox="0 0 18 14"><path d="M1 2h16M7 7h10M4 12h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+          Der
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. LOGO SUPERIOR -->
+  <div class="cfg-section">
+    <h3>🖼 Logotipo derecho superior</h3>
+    <div class="cfg-row">
+      <label class="cfg-file-btn" for="file-logo-top">📁 Seleccionar imagen</label>
+      <input type="file" id="file-logo-top" accept="image/*" style="display:none" onchange="loadLogoTop(event)">
+      <div class="cfg-file-hint">PNG, JPG, SVG, WEBP</div>
+      <div class="cfg-logo-preview" id="prev-logo-top"><span>Sin imagen</span></div>
+      <div style="margin-top:8px;">
+        <button class="cfg-file-btn" onclick="resetLogoTop()" style="border-color:#999;color:#666;">↩ Restaurar predeterminado</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. LOGO INFERIOR -->
+  <div class="cfg-section">
+    <h3>🖼 Logotipo derecho inferior</h3>
+    <div class="cfg-row">
+      <label class="cfg-file-btn" for="file-logo-bottom">📁 Seleccionar imagen</label>
+      <input type="file" id="file-logo-bottom" accept="image/*" style="display:none" onchange="loadLogoBottom(event)">
+      <div class="cfg-file-hint">PNG, JPG, SVG, WEBP</div>
+      <div class="cfg-logo-preview" id="prev-logo-bottom"><span>Sin imagen</span></div>
+      <div style="margin-top:8px;">
+        <button class="cfg-file-btn" onclick="resetLogoBottom()" style="border-color:#999;color:#666;">↩ Restaurar predeterminado</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. FONDO -->
+  <div class="cfg-section">
+    <h3>🌆 Imagen de fondo</h3>
+    <div class="cfg-row">
+      <label class="cfg-file-btn" for="file-bg">📁 Seleccionar imagen de fondo</label>
+      <input type="file" id="file-bg" accept="image/*" style="display:none" onchange="loadBg(event)">
+      <div class="cfg-file-hint">Se usará como fondo de pantalla completo.</div>
+    </div>
+    <div class="cfg-row">
+      <label>Opacidad del fondo: <span id="lbl-bg-opacity">100%</span></label>
+      <input type="range" id="range-bg-opacity" min="10" max="100" value="100" oninput="applyBgOpacity()">
+    </div>
+  </div>
+
+  <!-- 7. COLOR BOTÓN INICIAR SESIÓN -->
+  <div class="cfg-section">
+    <h3>🎨 Color del botón "Iniciar sesión"</h3>
+    <div class="cfg-row">
+      <div class="color-palette">
+        <button class="color-swatch active" data-color="#8B3A2A" data-hover="#a04535" style="background:#8B3A2A;" title="Vino (predeterminado)" onclick="setBtnColor(this)"></button>
+        <button class="color-swatch" data-color="#1a3a6b" data-hover="#254f94" style="background:#1a3a6b;" title="Azul marino" onclick="setBtnColor(this)"></button>
+        <button class="color-swatch" data-color="#1976d2" data-hover="#2196f3" style="background:#1976d2;" title="Azul institucional" onclick="setBtnColor(this)"></button>
+        <button class="color-swatch" data-color="#2e7d32" data-hover="#43a047" style="background:#2e7d32;" title="Verde" onclick="setBtnColor(this)"></button>
+        <button class="color-swatch" data-color="#5e35b1" data-hover="#7c4dff" style="background:#5e35b1;" title="Morado" onclick="setBtnColor(this)"></button>
+        <button class="color-swatch" data-color="#424242" data-hover="#616161" style="background:#424242;" title="Gris oscuro" onclick="setBtnColor(this)"></button>
+      </div>
+      <div class="cfg-file-hint" style="margin-top:8px;">O elige un color personalizado:</div>
+      <div style="display:flex; align-items:center; gap:10px; margin-top:6px;">
+        <input type="color" id="color-custom-btn" value="#8B3A2A" oninput="setCustomBtnColor(this.value)" style="width:42px;height:34px;border:1px solid #ccc;border-radius:7px;cursor:pointer;padding:2px;">
+        <span id="color-custom-label" style="font-size:0.8rem;color:#666;">#8B3A2A</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. TRANSPARENCIA Y ALTURA DE CONTENEDORES -->
+  <div class="cfg-section">
+    <h3>🪟 Contenedores</h3>
+
+    <div class="cfg-field-card">
+      <div class="cfg-row">
+        <label>Opacidad del formulario: <span id="lbl-form-opacity">55%</span></label>
+        <input type="range" id="range-form-opacity" min="0" max="100" value="55" oninput="applyFormOpacity()">
+      </div>
+      <div class="cfg-row" style="margin-bottom:0">
+        <label>Altura del formulario: <span id="lbl-form-height">Auto</span></label>
+        <input type="range" id="range-form-height" min="0" max="100" value="0" oninput="applyFormHeight()">
+      </div>
+    </div>
+
+    <div class="cfg-field-card">
+      <div class="cfg-row">
+        <label>Opacidad del panel de logos: <span id="lbl-logos-opacity">55%</span></label>
+        <input type="range" id="range-logos-opacity" min="0" max="100" value="55" oninput="applyLogosOpacity()">
+      </div>
+      <div class="cfg-row" style="margin-bottom:0">
+        <label>Altura del panel de logos: <span id="lbl-logos-height">Auto</span></label>
+        <input type="range" id="range-logos-height" min="0" max="100" value="0" oninput="applyLogosHeight()">
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 8. PDF PRIVACIDAD -->
+  <div class="cfg-section">
+    <h3>📄 Aviso de Privacidad (PDF)</h3>
+    <div class="cfg-row">
+      <label class="cfg-file-btn" for="file-pdf">📁 Cargar PDF</label>
+      <input type="file" id="file-pdf" accept="application/pdf" style="display:none" onchange="loadPrivacyPdf(event)">
+      <div class="cfg-file-hint" id="pdf-file-name">Ningún archivo cargado.</div>
+    </div>
+  </div>
+
+</div><!-- /config-panel -->
+
+<script>
+  /* ─── Estado ─────────────────────────────────────── */
+  let privacyPdfUrl = null;
+  let panelOpen = false;
+
+  /* ─── Panel toggle ───────────────────────────────── */
+  function togglePanel() {
+    panelOpen = !panelOpen;
+    document.getElementById('config-panel').classList.toggle('open', panelOpen);
+    document.getElementById('config-toggle').style.right = panelOpen ? '370px' : '0';
+  }
+
+  /* ─── Layout general ─────────────────────────────── */
+  function setLayout(pos) {
+    const screen = document.getElementById('main-screen');
+    screen.className = 'layout-' + pos;
+    ['left','center','right'].forEach(p =>
+      document.getElementById('lyt-' + p).classList.toggle('active', p === pos)
+    );
+  }
+
+  /* ─── Alineación textos/enlace ───────────────────── */
+  function setAlign(target, dir) {
+    const map = {
+      name: { el: 'sys-name',      prefix: 'align-name-' },
+      sub:  { el: 'sys-subtitle',  prefix: 'align-sub-'  },
+      priv: { el: 'privacy-link',  prefix: 'align-priv-' },
+    };
+    const { el, prefix } = map[target];
+    document.getElementById(el).style.textAlign = dir;
+    ['left','center','right'].forEach(d =>
+      document.getElementById(prefix + d).classList.toggle('active', d === dir)
+    );
+  }
+
+  /* ─── Textos ─────────────────────────────────────── */
+  function applySysName() {
+    const val = document.getElementById('cfg-sysname').value || 'Nombre del Sistema';
+    document.getElementById('sys-name').innerHTML = val;
+  }
+  function applySubtitle() {
+    document.getElementById('sys-subtitle').textContent = document.getElementById('cfg-subtitle').value;
+  }
+
+  /* ─── Logos ──────────────────────────────────────── */
+  function loadLogoTop(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const url = URL.createObjectURL(file);
+    document.getElementById('logo-top-img').src = url;
+    document.getElementById('logo-top-img').style.display = 'block';
+    document.getElementById('logo-top-default').style.display = 'none';
+    document.getElementById('prev-logo-top').innerHTML = `<img src="${url}">`;
+  }
+  function resetLogoTop() {
+    document.getElementById('logo-top-img').style.display = 'none';
+    document.getElementById('logo-top-default').style.display = 'flex';
+    document.getElementById('prev-logo-top').innerHTML = '<span>Sin imagen</span>';
+    document.getElementById('file-logo-top').value = '';
+  }
+  function loadLogoBottom(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const url = URL.createObjectURL(file);
+    document.getElementById('logo-bottom-img').src = url;
+    document.getElementById('logo-bottom-img').style.display = 'block';
+    document.getElementById('logo-bottom-default').style.display = 'none';
+    document.getElementById('prev-logo-bottom').innerHTML = `<img src="${url}">`;
+  }
+  function resetLogoBottom() {
+    document.getElementById('logo-bottom-img').style.display = 'none';
+    document.getElementById('logo-bottom-default').style.display = 'block';
+    document.getElementById('prev-logo-bottom').innerHTML = '<span>Sin imagen</span>';
+    document.getElementById('file-logo-bottom').value = '';
+  }
+
+  /* ─── Fondo ──────────────────────────────────────── */
+  function loadBg(e) {
+    const file = e.target.files[0]; if (!file) return;
+    document.getElementById('bg-layer').style.backgroundImage = `url('${URL.createObjectURL(file)}')`;
+    document.getElementById('bg-layer').style.backgroundSize = 'cover';
+  }
+  function applyBgOpacity() {
+    const v = document.getElementById('range-bg-opacity').value;
+    document.getElementById('lbl-bg-opacity').textContent = v + '%';
+    document.getElementById('bg-layer').style.opacity = v / 100;
+  }
+
+  /* ─── Color botón ────────────────────────────────── */
+  function setBtnColor(el) {
+    const color = el.dataset.color;
+    const hover = el.dataset.hover;
+    document.documentElement.style.setProperty('--btn-color', color);
+    document.documentElement.style.setProperty('--btn-hover', hover);
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('color-custom-btn').value = color;
+    document.getElementById('color-custom-label').textContent = color;
+  }
+  function setCustomBtnColor(val) {
+    document.documentElement.style.setProperty('--btn-color', val);
+    // hover: versión más clara
+    document.documentElement.style.setProperty('--btn-hover', val + 'cc');
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+    document.getElementById('color-custom-label').textContent = val;
+  }
+
+  /* ─── Formulario ─────────────────────────────────── */
+  function applyFormOpacity() {
+    const v = document.getElementById('range-form-opacity').value;
+    document.getElementById('lbl-form-opacity').textContent = v + '%';
+    document.getElementById('login-card').style.background = `rgba(255,255,255,${v/100})`;
+  }
+  function applyLogosOpacity() {
+    const v = document.getElementById('range-logos-opacity').value;
+    document.getElementById('lbl-logos-opacity').textContent = v + '%';
+    document.getElementById('logos-col').style.background = `rgba(255,255,255,${v/100})`;
+  }
+
+  /* ─── Altura contenedores ────────────────────────── */
+  function applyFormHeight() {
+    const v = parseInt(document.getElementById('range-form-height').value);
+    const lbl = document.getElementById('lbl-form-height');
+    const card = document.getElementById('login-card');
+    if (v === 0) {
+      lbl.textContent = 'Auto';
+      card.style.height = '';
+      card.style.minHeight = '';
+    } else {
+      const maxVh = window.innerHeight - 80;
+      const px = Math.round((v / 100) * maxVh);
+      // No menor que el contenido natural
+      const naturalH = card.scrollHeight;
+      const finalPx = Math.max(px, naturalH);
+      const finalPct = Math.round((finalPx / window.innerHeight) * 100);
+      lbl.textContent = finalPct + '% pantalla';
+      card.style.height = finalPx + 'px';
+      card.style.minHeight = naturalH + 'px';
+    }
+  }
+  function applyLogosHeight() {
+    const v = parseInt(document.getElementById('range-logos-height').value);
+    const lbl = document.getElementById('lbl-logos-height');
+    const col = document.getElementById('logos-col');
+    if (v === 0) {
+      lbl.textContent = 'Auto';
+      col.style.height = '';
+      col.style.minHeight = '';
+    } else {
+      const maxVh = window.innerHeight - 80;
+      const px = Math.round((v / 100) * maxVh);
+      const naturalH = col.scrollHeight;
+      const finalPx = Math.max(px, naturalH);
+      const finalPct = Math.round((finalPx / window.innerHeight) * 100);
+      lbl.textContent = finalPct + '% pantalla';
+      col.style.height = finalPx + 'px';
+      col.style.minHeight = naturalH + 'px';
+    }
+  }
+
+  /* ─── PDF ────────────────────────────────────────── */
+  function loadPrivacyPdf(e) {
+    const file = e.target.files[0]; if (!file) return;
+    if (privacyPdfUrl) URL.revokeObjectURL(privacyPdfUrl);
+    privacyPdfUrl = URL.createObjectURL(file);
+    document.getElementById('pdf-file-name').textContent = '✅ ' + file.name;
+  }
+  function openPdf() {
+    document.getElementById('pdf-modal').classList.add('open');
+    const body = document.getElementById('pdf-modal-body');
+    if (privacyPdfUrl) {
+      body.innerHTML = `<embed src="${privacyPdfUrl}#toolbar=1&navpanes=0" type="application/pdf" width="100%" height="100%">`;
+    } else {
+      body.innerHTML = `<div id="pdf-no-file"><div class="pdf-icon">📄</div><p>No se ha cargado ningún documento de privacidad.</p><p style="font-size:0.82rem;color:#aaa;">Configure el PDF en el panel lateral → "Aviso de Privacidad".</p></div>`;
+    }
+  }
+  function closePdf() {
+    document.getElementById('pdf-modal').classList.remove('open');
+    document.getElementById('pdf-modal-body').innerHTML = '';
+  }
+
+  /* ─── Contraseña ─────────────────────────────────── */
+  function togglePwd() {
+    const i = document.getElementById('inp-pwd');
+    i.type = i.type === 'password' ? 'text' : 'password';
+  }
+
+  /* ─── Escape cierra PDF ──────────────────────────── */
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closePdf(); });
+</script>
+</body>
+</html>

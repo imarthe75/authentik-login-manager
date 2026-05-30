@@ -1,0 +1,46 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: casmarts-login-backend
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://admin:casmarts_secure_db_pwd_2026@casmarts-core-pgpool:5432/authentik_login_manager}
+      VALKEY_URL: ${VALKEY_URL:-redis://casmarts-core-cache:6379/0}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-casmarts_admin_super_secret_key_123}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - authentik-custom-templates:/shared/authentik/templates
+    networks:
+      - aura-network
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: casmarts-login-frontend
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
+      - VITE_ADMIN_KEY=${VITE_ADMIN_KEY:-casmarts_admin_super_secret_key_123}
+    ports:
+      - "3080:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - aura-network
+    restart: always
+
+volumes:
+  authentik-custom-templates:
+
+networks:
+  aura-network:
+    external: true
