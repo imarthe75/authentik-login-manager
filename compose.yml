@@ -14,7 +14,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      - authentik-custom-templates:/shared/authentik/templates
+      - ../core-casmarts/data/authentik/custom-templates:/shared/authentik/templates
     networks:
       - aura-network
     restart: always
@@ -37,9 +37,6 @@ services:
     networks:
       - aura-network
     restart: always
-
-volumes:
-  authentik-custom-templates:
 
 networks:
   aura-network:
