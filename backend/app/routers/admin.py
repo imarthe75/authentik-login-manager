@@ -185,12 +185,14 @@ async def deploy_theme(flow_slug: str, db: AsyncSession = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Template load error: {str(e)}")
 
-    base_url = settings.PUBLIC_API_BASE_URL.rstrip("/")
+    # Use base64 data: URLs directly so the deployed HTML is self-contained.
+    # HTTP URLs require the browser to resolve them against the serving domain (Authentik),
+    # which cannot proxy binary image routes — causing silent 404s for logos and backgrounds.
     context = {
         "theme": db_theme,
-        "logo_top_url": f"{base_url}/api/v1/public/theme/{flow_slug}/image/logo_top",
-        "logo_bottom_url": f"{base_url}/api/v1/public/theme/{flow_slug}/image/logo_bottom",
-        "bg_image_url": f"{base_url}/api/v1/public/theme/{flow_slug}/image/bg_image",
+        "logo_top_url": db_theme.logo_top_base64 or "",
+        "logo_bottom_url": db_theme.logo_bottom_base64 or "",
+        "bg_image_url": db_theme.bg_image_base64 or "",
     }
 
     try:
