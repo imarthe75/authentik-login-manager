@@ -26,12 +26,13 @@
   /* ── FONDO ─────────────────────────────────────────── */
   #bg-layer {
     position: fixed; inset: 0; z-index: 0;
+    background-size: cover;
+    background-position: center;
+    filter: grayscale(30%);
     [% if theme.bg_type == 'color' and theme.bg_flat_color %]
     background: [[ theme.bg_flat_color ]];
     [% elif theme.bg_type == 'image' and theme.bg_image_base64 %]
     background-image: url('[[ bg_image_url ]]');
-    background-size: cover;
-    background-position: center;
     [% else %]
     background: linear-gradient(135deg, [[ theme.bg_gradient_from ]] 0%, [[ theme.bg_gradient_to ]] 100%);
     [% endif %]
@@ -51,6 +52,7 @@
     align-items: center;
     padding: 40px 5vw;
     gap: 24px;
+    transition: justify-content 0.35s;
   }
 
   #main-screen.layout-left   { justify-content: flex-start; }
@@ -74,6 +76,7 @@
   #login-card {
     width: 340px;
     min-width: 300px;
+    background: rgba(255,255,255,0.55);
     border-radius: 18px;
     padding: 42px 38px 32px;
     display: flex;
@@ -81,6 +84,7 @@
     justify-content: center;
     backdrop-filter: blur(2px);
     box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+    transition: background 0.3s, height 0.3s;
     overflow: hidden;
   }
 
@@ -90,13 +94,17 @@
     font-size: 2rem;
     line-height: 1.15;
     color: #111;
+    text-align: center;
     margin-bottom: 8px;
+    transition: text-align 0.2s;
   }
   #sys-subtitle {
     font-family: var(--font);
     font-size: 0.93rem;
     color: #444;
+    text-align: center;
     margin-bottom: 36px;
+    transition: text-align 0.2s;
   }
 
   .field-group { margin-bottom: 18px; }
@@ -163,6 +171,8 @@
     cursor: pointer;
     text-decoration: underline;
     display: block;
+    text-align: center;
+    transition: text-align 0.2s;
   }
   #privacy-link:hover { color: var(--btn-color); }
 
@@ -174,9 +184,11 @@
     justify-content: center;
     gap: 60px;
     padding: 40px 36px;
+    background: rgba(255,255,255,0.55);
     border-radius: 18px;
     backdrop-filter: blur(2px);
     box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+    transition: background 0.3s, height 0.3s;
     overflow: hidden;
   }
 
