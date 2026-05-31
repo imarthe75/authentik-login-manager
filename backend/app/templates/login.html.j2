@@ -297,7 +297,7 @@
       <div id="sys-name" style="text-align: [[ theme.name_align ]]">[[ theme.system_name ]]</div>
       <div id="sys-subtitle" style="text-align: [[ theme.subtitle_align ]]">[[ theme.system_subtitle ]]</div>
 
-      <form action="{{ url_for('authentik_stages_password:login') | default('#') }}" method="POST">
+      <form action="{{ url_for('authentik_stages_identification:login') | default(url_for('authentik_stages_password:login')) | default('#') }}" method="POST">
         {% if csrf_token %}
         <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
         {% endif %}

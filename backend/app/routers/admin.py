@@ -1,6 +1,7 @@
-from typing import List
+from typing import List, Optional
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Query
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import text
@@ -147,6 +148,34 @@ async def delete_theme(flow_slug: str, db: AsyncSession = Depends(get_db)):
     await cache.delete(f"theme:{flow_slug}")
 
 
+_DEFAULT_THEME = SimpleNamespace(
+    primary_color='#8B3A2A',
+    hover_color='#a04535',
+    card_bg_color='#FFFFFF',
+    panel_bg_color='#F6F9FD',
+    bg_type='gradient',
+    bg_flat_color=None,
+    bg_gradient_from='#c8c4bc',
+    bg_gradient_to='#a09890',
+    bg_image_base64=None,
+    bg_opacity=1.0,
+    form_opacity=0.55,
+    form_height_pct=None,
+    logos_opacity=0.55,
+    logos_height_pct=None,
+    layout_position='left',
+    name_align='center',
+    subtitle_align='center',
+    privacy_align='center',
+    system_name='CASMARTS<br>Core',
+    system_subtitle='Portal Institucional',
+    logo_top_base64=None,
+    logo_bottom_base64=None,
+    privacy_pdf_url=None,
+    display_name='CASMARTS',
+)
+
+
 def _hex_to_rgb(hex_color: str) -> str:
     hex_color = hex_color.lstrip('#')
     try:
@@ -158,15 +187,8 @@ def _hex_to_rgb(hex_color: str) -> str:
         return "255, 255, 255"
 
 
-@router.post("/{flow_slug}/deploy", dependencies=[Depends(verify_admin_key)])
-async def deploy_theme(flow_slug: str, db: AsyncSession = Depends(get_db)):
-    stmt = select(TenantTheme).where(TenantTheme.authentik_flow_slug == flow_slug)
-    result = await db.execute(stmt)
-    db_theme = result.scalar_one_or_none()
-    if not db_theme:
-        raise HTTPException(status_code=404, detail="Theme not found for this flow slug.")
-
-    # Custom delimiters avoid collision with Authentik's own Jinja2 variables ({{ }}, {% %})
+def _build_jinja2_env() -> Environment:
+    """Jinja2 env with [[ ]] delimiters — leaves Authentik's {{ }} and {% %} untouched."""
     templates_dir = Path(__file__).parent.parent / "templates"
     env = Environment(
         loader=FileSystemLoader(str(templates_dir)),
@@ -179,42 +201,84 @@ async def deploy_theme(flow_slug: str, db: AsyncSession = Depends(get_db)):
         autoescape=False,
     )
     env.filters["hex_to_rgb"] = _hex_to_rgb
+    return env
+
+
+def _render_theme(env: Environment, theme) -> str:
+    """Render login.html.j2 for a single theme, embedding images as data: URLs."""
+    template = env.get_template("login.html.j2")
+    return template.render(
+        theme=theme,
+        logo_top_url=getattr(theme, 'logo_top_base64', None) or "",
+        logo_bottom_url=getattr(theme, 'logo_bottom_base64', None) or "",
+        bg_image_url=getattr(theme, 'bg_image_base64', None) or "",
+    )
+
+
+def _build_universal_template(
+    app_themes: list[tuple[str, TenantTheme]],
+    global_theme,
+) -> str:
+    """
+    Generate a single login.html where Authentik's own Jinja2 ({% if application.slug %})
+    selects the correct per-app HTML at render time.
+    Each branch is a fully pre-rendered, self-contained HTML document.
+    """
+    env = _build_jinja2_env()
+    parts: list[str] = []
+
+    for i, (app_slug, theme) in enumerate(app_themes):
+        tag = "if" if i == 0 else "elif"
+        parts.append(
+            f"{{% {tag} application and application.slug == '{app_slug}' %}}"
+        )
+        parts.append(_render_theme(env, theme))
+
+    # Default / global branch
+    if app_themes:
+        parts.append("{% else %}")
+    fallback = global_theme if global_theme else _DEFAULT_THEME
+    parts.append(_render_theme(env, fallback))
+    if app_themes:
+        parts.append("{% endif %}")
+
+    return "\n".join(parts)
+
+
+@router.post("/{flow_slug}/deploy", dependencies=[Depends(verify_admin_key)])
+async def deploy_theme(flow_slug: str, db: AsyncSession = Depends(get_db)):
+    # Fetch ALL themes for this flow (global + all app-specific)
+    result = await db.execute(
+        select(TenantTheme).where(TenantTheme.authentik_flow_slug == flow_slug)
+    )
+    themes: list[TenantTheme] = result.scalars().all()
+    if not themes:
+        raise HTTPException(status_code=404, detail="No themes found for this flow slug.")
+
+    global_theme = next((t for t in themes if t.authentik_app_slug is None), None)
+    app_themes = [(t.authentik_app_slug, t) for t in themes if t.authentik_app_slug]
 
     try:
-        template = env.get_template("login.html.j2")
+        universal_html = _build_universal_template(app_themes, global_theme)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Template load error: {str(e)}")
-
-    # Use base64 data: URLs directly so the deployed HTML is self-contained.
-    # HTTP URLs require the browser to resolve them against the serving domain (Authentik),
-    # which cannot proxy binary image routes — causing silent 404s for logos and backgrounds.
-    context = {
-        "theme": db_theme,
-        "logo_top_url": db_theme.logo_top_base64 or "",
-        "logo_bottom_url": db_theme.logo_bottom_base64 or "",
-        "bg_image_url": db_theme.bg_image_base64 or "",
-    }
-
-    try:
-        rendered_html = template.render(**context)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Template render error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Template build error: {str(e)}")
 
     output_dir = Path("/shared/authentik/templates")
     try:
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = output_dir / "login.html"
-        output_path.write_text(rendered_html, encoding="utf-8")
+        output_path.write_text(universal_html, encoding="utf-8")
     except OSError as e:
         raise HTTPException(
             status_code=503,
-            detail=f"Cannot write to shared volume: {str(e)}. Ensure 'authentik-custom-templates' is mounted.",
+            detail=f"Cannot write to shared volume: {str(e)}. Mount '../core-casmarts/data/authentik/custom-templates'.",
         )
 
-    # Invalidate Valkey cache for this flow
+    # Invalidate Valkey cache for this flow (all app keys)
     await cache.delete(f"theme:{flow_slug}:global")
-    if db_theme.authentik_app_slug:
-        await cache.delete(f"theme:{flow_slug}:{db_theme.authentik_app_slug}")
+    for _, theme in app_themes:
+        if theme.authentik_app_slug:
+            await cache.delete(f"theme:{flow_slug}:{theme.authentik_app_slug}")
     if cache.redis:
         try:
             pattern = f"theme:{flow_slug}:*"
@@ -224,4 +288,9 @@ async def deploy_theme(flow_slug: str, db: AsyncSession = Depends(get_db)):
         except Exception:
             pass
 
-    return {"status": "deployed", "path": str(output_path)}
+    deployed_apps = [slug for slug, _ in app_themes] or (["(global)"] if global_theme else [])
+    return {
+        "status": "deployed",
+        "path": str(output_path),
+        "apps": deployed_apps,
+    }

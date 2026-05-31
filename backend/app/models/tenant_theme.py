@@ -12,7 +12,7 @@ class TenantTheme(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     authentik_flow_slug: Mapped[str] = mapped_column(
-        String(100), unique=True, index=True, nullable=False
+        String(100), index=True, nullable=False
     )
     authentik_app_slug: Mapped[str | None] = mapped_column(
         String(100), index=True, nullable=True
