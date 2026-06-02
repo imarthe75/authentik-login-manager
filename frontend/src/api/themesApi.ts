@@ -1,14 +1,12 @@
-import { Theme } from '../types/theme';
+import { Theme, EmailBodies } from '../types/theme';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 const ADMIN_KEY = import.meta.env.VITE_ADMIN_KEY || '';
 
-const getHeaders = () => {
-  return {
-    'Content-Type': 'application/json',
-    'X-Admin-Key': ADMIN_KEY,
-  };
-};
+const getHeaders = () => ({
+  'Content-Type': 'application/json',
+  'X-Admin-Key': ADMIN_KEY,
+});
 
 export const themesApi = {
   async getThemes(skip = 0, limit = 50): Promise<Theme[]> {
@@ -16,23 +14,16 @@ export const themesApi = {
       method: 'GET',
       headers: getHeaders(),
     });
-    if (!response.ok) {
-      throw new Error(`Failed to fetch themes list: ${response.statusText}`);
-    }
+    if (!response.ok) throw new Error(`Failed to fetch themes list: ${response.statusText}`);
     return response.json();
   },
 
   async getTheme(slug: string, appSlug?: string | null): Promise<Theme> {
-    const url = appSlug 
+    const url = appSlug
       ? `${API_BASE}/api/v1/themes/${slug}?app_slug=${appSlug}`
       : `${API_BASE}/api/v1/themes/${slug}`;
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: getHeaders(),
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to fetch theme for '${slug}': ${response.statusText}`);
-    }
+    const response = await fetch(url, { method: 'GET', headers: getHeaders() });
+    if (!response.ok) throw new Error(`Failed to fetch theme for '${slug}': ${response.statusText}`);
     return response.json();
   },
 
@@ -42,21 +33,17 @@ export const themesApi = {
       headers: getHeaders(),
       body: JSON.stringify(theme),
     });
-    if (!response.ok) {
-      throw new Error(`Failed to save theme: ${response.statusText}`);
-    }
+    if (!response.ok) throw new Error(`Failed to save theme: ${response.statusText}`);
     return response.json();
   },
 
-  async patchTheme(slug: string, theme: Partial<Theme>): Promise<Theme> {
+  async patchTheme(slug: string, data: Partial<Theme> & { email_bodies?: EmailBodies }): Promise<Theme> {
     const response = await fetch(`${API_BASE}/api/v1/themes/${slug}`, {
       method: 'PATCH',
       headers: getHeaders(),
-      body: JSON.stringify(theme),
+      body: JSON.stringify(data),
     });
-    if (!response.ok) {
-      throw new Error(`Failed to patch theme: ${response.statusText}`);
-    }
+    if (!response.ok) throw new Error(`Failed to patch theme: ${response.statusText}`);
     return response.json();
   },
 
@@ -65,9 +52,7 @@ export const themesApi = {
       method: 'DELETE',
       headers: getHeaders(),
     });
-    if (!response.ok) {
-      throw new Error(`Failed to delete theme: ${response.statusText}`);
-    }
+    if (!response.ok) throw new Error(`Failed to delete theme: ${response.statusText}`);
   },
 
   async invalidatePublicCache(slug: string): Promise<void> {
@@ -85,9 +70,7 @@ export const themesApi = {
       method: 'GET',
       headers: getHeaders(),
     });
-    if (!response.ok) {
-      throw new Error(`Failed to fetch Authentik applications: ${response.statusText}`);
-    }
+    if (!response.ok) throw new Error(`Failed to fetch Authentik applications: ${response.statusText}`);
     return response.json();
   },
 
@@ -101,5 +84,14 @@ export const themesApi = {
       throw new Error(detail?.detail || `Deploy failed: ${response.statusText}`);
     }
     return response.json();
+  },
+
+  async getEmailPreview(flowSlug: string, eventType: string): Promise<string> {
+    const response = await fetch(
+      `${API_BASE}/api/v1/themes/${flowSlug}/emails/preview/${eventType}`,
+      { method: 'GET', headers: getHeaders() }
+    );
+    if (!response.ok) throw new Error(`Email preview failed: ${response.statusText}`);
+    return response.text();
   },
 };

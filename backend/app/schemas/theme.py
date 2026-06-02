@@ -1,9 +1,25 @@
 import uuid
 from datetime import datetime
-from typing import Optional, Literal
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from typing import Optional, Literal, Dict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 HEX_COLOR_REGEX = r"^#[0-9a-fA-F]{6}$"
+EMAIL_EVENT_TYPE = Literal[
+    'password_reset', 'new_account', 'account_lockout',
+    'email_verification', 'security_change'
+]
+EMAIL_TEMPLATE_TYPE = Literal['integrated', 'custom_per_event']
+
+
+class EmailBodySchema(BaseModel):
+    subject: str = Field('', max_length=200)
+    body_html: str = Field('', max_length=50000)
+
+    @field_validator('subject', 'body_html', mode='before')
+    @classmethod
+    def strip_strings(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
+
 
 class ThemeBase(BaseModel):
     display_name: str = Field(..., max_length=150)
@@ -29,16 +45,34 @@ class ThemeBase(BaseModel):
     privacy_pdf_url: Optional[str] = Field(None, max_length=512)
     authentik_app_slug: Optional[str] = Field(None, max_length=100)
     is_active: bool = True
+    # Access & notifications
+    allow_self_registration: bool = False
+    require_email_verification: bool = True
+    show_social_google: bool = False
+    show_social_microsoft: bool = False
+    show_social_gov_id: bool = False
+    email_footer_text: Optional[str] = Field(None, max_length=255)
+    email_template_type: EMAIL_TEMPLATE_TYPE = 'integrated'
 
     @field_validator("system_name", mode="after")
     @classmethod
     def sanitize_system_name(cls, v: str) -> str:
-        # Prevent arbitrary dangerous script tags, keep basic visual layout tags
-        # Basic sanitization
         for bad in ["<script", "javascript:", "onload", "onerror", "<iframe>"]:
             if bad in v.lower():
                 raise ValueError(f"Dangerous content detected in system_name: {bad}")
         return v
+
+    @field_validator("email_footer_text", mode="before")
+    @classmethod
+    def strip_footer(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
+
+    @model_validator(mode='after')
+    def coerce_email_verification(self) -> 'ThemeBase':
+        if not self.allow_self_registration:
+            self.require_email_verification = False
+        return self
+
 
 class ThemeCreate(ThemeBase):
     authentik_flow_slug: str = Field(..., max_length=100)
@@ -47,6 +81,7 @@ class ThemeCreate(ThemeBase):
     bg_image_base64: Optional[str] = None
     logo_top_text: Optional[str] = None
     logo_bottom_text: Optional[str] = None
+
 
 class ThemeUpdate(BaseModel):
     authentik_app_slug: Optional[str] = Field(None, max_length=100)
@@ -77,6 +112,30 @@ class ThemeUpdate(BaseModel):
     logo_top_text: Optional[str] = None
     logo_bottom_text: Optional[str] = None
     is_active: Optional[bool] = None
+    # Access & notifications
+    allow_self_registration: Optional[bool] = None
+    require_email_verification: Optional[bool] = None
+    show_social_google: Optional[bool] = None
+    show_social_microsoft: Optional[bool] = None
+    show_social_gov_id: Optional[bool] = None
+    email_footer_text: Optional[str] = Field(None, max_length=255)
+    email_template_type: Optional[EMAIL_TEMPLATE_TYPE] = None
+
+    @field_validator("email_footer_text", mode="before")
+    @classmethod
+    def strip_footer(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
+
+    @model_validator(mode='after')
+    def coerce_email_verification(self) -> 'ThemeUpdate':
+        if self.allow_self_registration is False:
+            self.require_email_verification = False
+        return self
+
+
+class ThemeUpdateWithEmail(ThemeUpdate):
+    email_bodies: Optional[Dict[str, EmailBodySchema]] = None
+
 
 class ThemeResponse(ThemeBase):
     id: uuid.UUID
@@ -90,6 +149,11 @@ class ThemeResponse(ThemeBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ThemeResponseWithEmail(ThemeResponse):
+    email_bodies: Dict[str, EmailBodySchema] = {}
+
 
 class ThemePublic(BaseModel):
     display_name: str
@@ -119,6 +183,10 @@ class ThemePublic(BaseModel):
     has_bg_image: bool
     logo_top_text: Optional[str] = None
     logo_bottom_text: Optional[str] = None
-    is_custom: bool = True  # False = no theme designed, use Authentik native login
+    allow_self_registration: bool = False
+    show_social_google: bool = False
+    show_social_microsoft: bool = False
+    show_social_gov_id: bool = False
+    is_custom: bool = True
 
     model_config = ConfigDict(from_attributes=True)

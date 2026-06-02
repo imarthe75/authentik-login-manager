@@ -98,6 +98,27 @@ class TenantTheme(Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False
     )
+    allow_self_registration: Mapped[bool] = mapped_column(
+        Boolean, server_default='false', nullable=False
+    )
+    require_email_verification: Mapped[bool] = mapped_column(
+        Boolean, server_default='true', nullable=False
+    )
+    show_social_google: Mapped[bool] = mapped_column(
+        Boolean, server_default='false', nullable=False
+    )
+    show_social_microsoft: Mapped[bool] = mapped_column(
+        Boolean, server_default='false', nullable=False
+    )
+    show_social_gov_id: Mapped[bool] = mapped_column(
+        Boolean, server_default='false', nullable=False
+    )
+    email_footer_text: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    email_template_type: Mapped[str] = mapped_column(
+        String(20), server_default='integrated', nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )

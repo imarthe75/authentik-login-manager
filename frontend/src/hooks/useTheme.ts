@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Theme } from '../types/theme';
+import { Theme, EmailBodies } from '../types/theme';
 import { themesApi } from '../api/themesApi';
 
 export type SavePhase = 'idle' | 'saving' | 'deploying' | 'done' | 'deploy_error';
@@ -32,7 +32,15 @@ const DEFAULT_THEME_STATE: Theme = {
   logo_top_text: null,
   logo_bottom_text: null,
   privacy_pdf_url: '/static/aviso_privacidad.pdf',
-  is_active: true
+  is_active: true,
+  allow_self_registration: false,
+  require_email_verification: false,
+  show_social_google: false,
+  show_social_microsoft: false,
+  show_social_gov_id: false,
+  email_footer_text: null,
+  email_template_type: 'integrated',
+  email_bodies: {},
 };
 
 export const useTheme = () => {
@@ -49,8 +57,7 @@ export const useTheme = () => {
     try {
       setError(null);
       setCurrentSlug(slug);
-      
-      // Try to load the specific app theme if appSlug is provided
+
       if (appSlug) {
         try {
           const data = await themesApi.getTheme(slug, appSlug);
@@ -59,30 +66,23 @@ export const useTheme = () => {
           setSavePhase('idle');
           setDeployError(null);
           return;
-        } catch (err) {
-          console.warn(`App theme for '${appSlug}' not found, falling back to global theme.`);
-          // Try to load the global flow theme
+        } catch {
           try {
             const globalData = await themesApi.getTheme(slug, null);
-            // Copy global theme to start customization for this specific app
             const newAppTheme: Theme = {
               ...globalData,
               authentik_app_slug: appSlug,
-              display_name: `${globalData.display_name} - ${appSlug}`
+              display_name: `${globalData.display_name} - ${appSlug}`,
             };
-            // Delete ID so it behaves as a new record when upserted
             delete (newAppTheme as any).id;
             setTheme(newAppTheme);
             setIsDirty(true);
             setSavePhase('idle');
             setDeployError(null);
             return;
-          } catch (globalErr) {
-            // Both app and global theme failed, proceed to DEFAULT_THEME_STATE
-          }
+          } catch { /* fall through */ }
         }
       } else {
-        // Try to load global theme
         try {
           const data = await themesApi.getTheme(slug, null);
           setTheme(data);
@@ -90,26 +90,24 @@ export const useTheme = () => {
           setSavePhase('idle');
           setDeployError(null);
           return;
-        } catch (err) {}
+        } catch { /* fall through */ }
       }
 
-      console.warn("Theme record not in DB. Initializing locally.");
       setTheme({
         ...DEFAULT_THEME_STATE,
         authentik_flow_slug: slug,
         authentik_app_slug: appSlug || null,
-        display_name: slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+        display_name: slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
       });
       setIsDirty(true);
       setSavePhase('idle');
       setDeployError(null);
-    } catch (err: any) {
-      console.warn("Error in loadTheme: ", err);
+    } catch {
       setTheme({
         ...DEFAULT_THEME_STATE,
         authentik_flow_slug: slug,
         authentik_app_slug: appSlug || null,
-        display_name: slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+        display_name: slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
       });
       setIsDirty(true);
       setSavePhase('idle');
@@ -118,59 +116,70 @@ export const useTheme = () => {
   }, []);
 
   const updateField = useCallback(<K extends keyof Theme>(key: K, value: Theme[K]) => {
-    setTheme((prev) => ({ ...prev, [key]: value }));
+    setTheme(prev => {
+      const next = { ...prev, [key]: value };
+      // Coerce: require_email_verification must be false when self-registration is off
+      if (key === 'allow_self_registration' && !value) {
+        next.require_email_verification = false;
+      }
+      return next;
+    });
     setIsDirty(true);
     setSavePhase('idle');
     setDeployError(null);
   }, []);
 
-  const convertFileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
+  const updateEmailBody = useCallback((eventType: string, body: { subject: string; body_html: string }) => {
+    setTheme(prev => ({
+      ...prev,
+      email_bodies: { ...(prev.email_bodies ?? {}), [eventType]: body },
+    }));
+    setIsDirty(true);
+    setSavePhase('idle');
+    setDeployError(null);
+  }, []);
+
+  const convertFileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (err) => reject(err);
+      reader.onerror = reject;
     });
-  };
 
-  const uploadFileField = useCallback(async (key: 'logo_top_base64' | 'logo_bottom_base64' | 'bg_image_base64', file: File) => {
-    try {
-      const base64Str = await convertFileToBase64(file);
-      updateField(key, base64Str);
-    } catch (err) {
-      console.error("Base64 file translation failure: ", err);
-      setError("Error converting file to Base64.");
-    }
-  }, [updateField]);
+  const uploadFileField = useCallback(
+    async (key: 'logo_top_base64' | 'logo_bottom_base64' | 'bg_image_base64', file: File) => {
+      try {
+        const base64Str = await convertFileToBase64(file);
+        updateField(key, base64Str);
+      } catch {
+        setError('Error converting file to Base64.');
+      }
+    },
+    [updateField]
+  );
 
   const saveTheme = useCallback(async () => {
     let currentPhase: SavePhase = 'idle';
     try {
       setError(null);
       setDeployError(null);
-
-      // Phase 1: persist to database
       currentPhase = 'saving';
       setSavePhase('saving');
       const saved = await themesApi.upsertTheme(theme);
       setTheme(saved);
       setIsDirty(false);
-
-      // Phase 2: invalidate Valkey cache + deploy static template
       currentPhase = 'deploying';
       setSavePhase('deploying');
       await themesApi.invalidatePublicCache(theme.authentik_flow_slug);
       await themesApi.deployTheme(theme.authentik_flow_slug);
-
       setSavePhase('done');
     } catch (err: any) {
       const msg = err?.message || 'Error al guardar o desplegar.';
       if (currentPhase === 'saving') {
-        // Hard failure: nothing was saved
         setError(msg);
         setSavePhase('idle');
       } else {
-        // Theme was saved but deploy failed — non-blocking warning
         setDeployError(msg);
         setSavePhase('deploy_error');
       }
@@ -199,10 +208,11 @@ export const useTheme = () => {
     error,
     loadTheme,
     updateField,
+    updateEmailBody,
     uploadFileField,
     saveTheme,
     retryDeploy,
     setTheme,
-    setIsDirty
+    setIsDirty,
   };
 };
