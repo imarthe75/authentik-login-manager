@@ -25,6 +25,8 @@ export interface Theme {
   logos_height_pct: number | null;
   logo_top_base64: string | null;
   logo_bottom_base64: string | null;
+  logo_top_text: string | null;
+  logo_bottom_text: string | null;
   privacy_pdf_url: string | null;
   is_active: boolean;
   created_at?: string;

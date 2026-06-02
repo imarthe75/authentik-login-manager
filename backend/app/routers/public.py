@@ -25,8 +25,8 @@ DEFAULT_THEME = {
     "name_align": "center",
     "subtitle_align": "center",
     "privacy_align": "center",
-    "primary_color": "#8B3A2A",
-    "hover_color": "#a04535",
+    "primary_color": "#4272A5",
+    "hover_color": "#2d5580",
     "card_bg_color": "#FFFFFF",
     "panel_bg_color": "#F6F9FD",
     "bg_type": "gradient",
@@ -42,7 +42,9 @@ DEFAULT_THEME = {
     "authentik_app_slug": None,
     "has_logo_top": False,
     "has_logo_bottom": False,
-    "has_bg_image": False
+    "has_bg_image": False,
+    "logo_top_text": None,
+    "logo_bottom_text": None
 }
 
 @router.get("/theme/{flow_slug}", response_model=ThemePublic)
@@ -77,12 +79,16 @@ async def get_public_theme(
             logger.info(f"Found database theme specifically for app='{app}' (ID: {db_theme.id})")
 
     if not db_theme:
-        logger.info(f"Querying DB for flow theme with authentik_flow_slug='{flow_slug}'")
-        stmt = select(TenantTheme).where(TenantTheme.authentik_flow_slug == flow_slug)
+        # Fallback: global theme for this flow (app_slug IS NULL — not app-specific)
+        logger.info(f"Querying DB for global flow theme with authentik_flow_slug='{flow_slug}' and no app_slug")
+        stmt = select(TenantTheme).where(
+            TenantTheme.authentik_flow_slug == flow_slug,
+            TenantTheme.authentik_app_slug.is_(None)
+        )
         result = await db.execute(stmt)
         db_theme = result.scalar_one_or_none()
         if db_theme:
-            logger.info(f"Found database theme for flow_slug='{flow_slug}' (ID: {db_theme.id})")
+            logger.info(f"Found global flow theme for flow_slug='{flow_slug}' (ID: {db_theme.id})")
 
     if db_theme:
         theme_dict = {
@@ -110,13 +116,17 @@ async def get_public_theme(
             "authentik_app_slug": db_theme.authentik_app_slug,
             "has_logo_top": bool(db_theme.logo_top_base64),
             "has_logo_bottom": bool(db_theme.logo_bottom_base64),
-            "has_bg_image": bool(db_theme.bg_image_base64)
+            "has_bg_image": bool(db_theme.bg_image_base64),
+            "logo_top_text": db_theme.logo_top_text or None,
+            "logo_bottom_text": db_theme.logo_bottom_text or None,
+            "is_custom": True,  # theme exists in DB
         }
     else:
         logger.warning(f"No custom theme found for app='{app}' or flow_slug='{flow_slug}'. Using default theme.")
         # Prevent Authentik from breaking: return fallback default theme config
         theme_dict = DEFAULT_THEME.copy()
         theme_dict["display_name"] = flow_slug.replace("-", " ").title()
+        theme_dict["is_custom"] = False  # no theme designed — use Authentik native
 
     # Save compiled public representation to Valkey (TTL 5 minutes = 300 seconds)
     logger.info(f"Caching retrieved theme for key '{cache_key}' with 300s TTL")
@@ -144,8 +154,11 @@ async def get_theme_image(
         db_theme = result.scalar_one_or_none()
 
     if not db_theme:
-        logger.info(f"Querying DB for theme image with authentik_flow_slug='{flow_slug}'")
-        stmt = select(TenantTheme).where(TenantTheme.authentik_flow_slug == flow_slug)
+        logger.info(f"Querying DB for global theme image with authentik_flow_slug='{flow_slug}' and no app_slug")
+        stmt = select(TenantTheme).where(
+            TenantTheme.authentik_flow_slug == flow_slug,
+            TenantTheme.authentik_app_slug.is_(None)
+        )
         result = await db.execute(stmt)
         db_theme = result.scalar_one_or_none()
 

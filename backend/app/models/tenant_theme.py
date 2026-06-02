@@ -39,10 +39,10 @@ class TenantTheme(Base):
         String(10), default="center", nullable=False
     )
     primary_color: Mapped[str] = mapped_column(
-        String(7), default="#8B3A2A", nullable=False
+        String(7), default="#4272A5", nullable=False
     )
     hover_color: Mapped[str] = mapped_column(
-        String(7), default="#a04535", nullable=False
+        String(7), default="#2d5580", nullable=False
     )
     card_bg_color: Mapped[str] = mapped_column(
         String(7), default="#FFFFFF", nullable=False
@@ -84,6 +84,12 @@ class TenantTheme(Base):
         Text, nullable=True
     )
     logo_bottom_base64: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+    logo_top_text: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+    logo_bottom_text: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )
     privacy_pdf_url: Mapped[str | None] = mapped_column(

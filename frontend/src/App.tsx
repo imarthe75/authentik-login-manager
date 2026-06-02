@@ -64,8 +64,8 @@ export const App: React.FC = () => {
           name_align: 'center',
           subtitle_align: 'center',
           privacy_align: 'center',
-          primary_color: '#8B3A2A',
-          hover_color: '#a04535',
+          primary_color: '#4272A5',
+          hover_color: '#2d5580',
           card_bg_color: '#FFFFFF',
           panel_bg_color: '#F6F9FD',
           bg_type: 'gradient',
@@ -106,6 +106,14 @@ export const App: React.FC = () => {
     }
     loadTheme(slug);
   };
+  
+  const handleChangeApp = (appSlug: string | null) => {
+    if (isDirty) {
+      const confirmLeave = window.confirm("Tienes cambios sin guardar. ¿Deseas descartarlos y cambiar de aplicación?");
+      if (!confirmLeave) return;
+    }
+    loadTheme(theme.authentik_flow_slug, appSlug);
+  };
 
   const handleCreateTheme = (displayName: string, flowSlug: string) => {
     const newTheme: Theme = {
@@ -118,8 +126,8 @@ export const App: React.FC = () => {
       name_align: 'center',
       subtitle_align: 'center',
       privacy_align: 'center',
-      primary_color: '#8B3A2A',
-      hover_color: '#a04535',
+      primary_color: '#4272A5',
+      hover_color: '#2d5580',
       card_bg_color: '#FFFFFF',
       panel_bg_color: '#F6F9FD',
       bg_type: 'gradient',
@@ -155,7 +163,7 @@ export const App: React.FC = () => {
       {/* Top Navigation Header Bar */}
       <header className="h-16 shrink-0 bg-white border-b border-gray-200 px-6 flex items-center justify-between shadow-sm z-30">
         <div className="flex items-center gap-3">
-          <div className="bg-[#8B3A2A] text-white p-2 rounded-lg font-black text-sm tracking-wider">
+          <div className="bg-[#4272A5] text-white p-2 rounded-lg font-black text-sm tracking-wider">
             CA
           </div>
           <div>
@@ -205,6 +213,7 @@ export const App: React.FC = () => {
             onSave={handleSave}
             onRetryDeploy={retryDeploy}
             authentikApps={authentikApps}
+            onChangeApp={handleChangeApp}
           />
         </section>
       </main>

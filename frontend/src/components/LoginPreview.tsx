@@ -76,20 +76,32 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme }) => {
 
       {/* Main Preview Container */}
       <div
-        className="relative z-10 w-full h-full flex items-center px-12 py-10 gap-6 transition-all duration-350"
-        style={{ justifyContent: getJustifyContent() }}
+        className="relative z-10 w-full h-full flex items-center px-12 py-10 transition-all duration-350"
+        style={{
+          justifyContent: theme.layout_position === 'left' ? 'flex-start' : theme.layout_position === 'right' ? 'flex-end' : 'center',
+          paddingLeft: theme.layout_position === 'left' ? '6vw' : '3rem',
+          paddingRight: theme.layout_position === 'right' ? '6vw' : '3rem',
+        }}
       >
-        {/* FORM PANEL */}
+        {/* UNIFIED SPLIT CARD */}
         <div
-          className="flex items-stretch shrink-0 transition-all duration-300"
-          style={{ order: getFlexOrder('login') }}
+          className="relative flex items-stretch border border-white/60 rounded-3xl shadow-2xl overflow-hidden transition-all duration-300 bg-white/70 backdrop-blur-xl"
+          style={{
+            flexDirection: theme.layout_position === 'right' ? 'row-reverse' : 'row',
+            width: '780px',
+            maxWidth: '90vw',
+            height: theme.form_height_pct || theme.logos_height_pct ? `${theme.form_height_pct || theme.logos_height_pct}vh` : '500px',
+            maxHeight: '560px',
+            background: hexToRgba(theme.card_bg_color || '#FFFFFF', theme.form_opacity),
+          }}
         >
+          {/* FORM PANEL */}
           <div
             id="login-card"
-            className="w-[340px] min-w-[300px] rounded-2xl p-10 flex flex-col justify-center shadow-2xl backdrop-blur-[2px] transition-all duration-300"
+            className="w-[390px] shrink-0 p-10 flex flex-col justify-center transition-all duration-300 overflow-y-auto"
             style={{
-              background: hexToRgba(theme.card_bg_color || '#FFFFFF', theme.form_opacity),
-              height: theme.form_height_pct ? `${theme.form_height_pct}vh` : 'auto',
+              background: 'transparent',
+              height: '100%',
             }}
           >
             {/* System Title */}
@@ -150,7 +162,7 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme }) => {
             <button
               type="button"
               disabled
-              className="w-full py-3 text-white rounded-full font-bold text-xs tracking-widest uppercase transition-all shadow-md select-none font-sans"
+              className="w-full py-3 text-white rounded-lg font-bold text-xs tracking-widest uppercase transition-all shadow-sm select-none font-sans"
               style={{
                 backgroundColor: primaryColor,
                 cursor: 'not-allowed',
@@ -161,7 +173,7 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme }) => {
 
             <span
               onClick={() => setShowModal(true)}
-              className="text-xs text-gray-600 font-sans cursor-pointer underline hover:text-[#8B3A2A] mt-2 block"
+              className="text-xs text-gray-600 font-sans cursor-pointer underline hover:text-[#4272A5] mt-2 block"
               style={{
                 textAlign: theme.privacy_align,
                 '--hover-c': hoverColor,
@@ -170,68 +182,58 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme }) => {
               Privacidad
             </span>
           </div>
-        </div>
 
-        {/* LOGOS PANEL */}
-        <div
-          className="flex flex-col items-center justify-center gap-14 px-9 py-10 rounded-2xl shadow-2xl backdrop-blur-[2px] overflow-hidden transition-all duration-300"
-          style={{
-            order: getFlexOrder('logos'),
-            background: hexToRgba(theme.panel_bg_color || '#F6F9FD', theme.logos_opacity),
-            height: theme.logos_height_pct ? `${theme.logos_height_pct}vh` : 'auto',
-          }}
-        >
-          {/* Logo Superior */}
-          <div className="flex items-center gap-6">
-            {theme.logo_top_base64 ? (
-              <img
-                src={theme.logo_top_base64}
-                alt="Logo superior"
-                className="max-h-[110px] max-w-[380px] object-contain transition-all"
-              />
-            ) : (
-              /* Shield placeholder */
-              <div className="flex items-center gap-4 bg-white/10 rounded-xl px-5 py-3 border border-white/20 select-none">
-                <svg className="w-16 h-20 shrink-0" viewBox="0 0 72 82" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M36 2 L70 16 L70 46 C70 64 36 80 36 80 C36 80 2 64 2 46 L2 16 Z" fill="#c8a05a" stroke="#8B6914" strokeWidth="2"/>
-                  <path d="M36 8 L64 20 L64 45 C64 61 36 75 36 75 C36 75 8 61 8 45 L8 20 Z" fill="#b08840"/>
-                  <text x="36" y="36" textAnchor="middle" fontSize="8" fill="#fff" fontFamily="serif" fontWeight="bold">GEM</text>
-                  <text x="36" y="48" textAnchor="middle" fontSize="5.5" fill="#fff" fontFamily="serif">TOLUCA</text>
-                </svg>
-                <div className="text-left text-white leading-tight">
-                  <div className="text-[10px] font-semibold tracking-wider opacity-85 text-shadow">GOBIERNO DEL</div>
-                  <div className="font-extrabold text-2xl text-shadow font-sans">ESTADO DE<br />MÉXICO</div>
+          {/* LOGOS PANEL */}
+          <div
+            className="flex-1 flex flex-col items-center justify-center gap-8 px-9 py-10 overflow-hidden transition-all duration-300"
+            style={{
+              background: hexToRgba(theme.panel_bg_color || '#F6F9FD', theme.logos_opacity ?? 0.55),
+              height: '100%',
+              borderLeft: theme.layout_position === 'right' ? 'none' : '1px solid rgba(255, 255, 255, 0.4)',
+              borderRight: theme.layout_position === 'right' ? '1px solid rgba(255, 255, 255, 0.4)' : 'none',
+            }}
+          >
+            {/* Logo Superior */}
+            <div className="flex items-center justify-center w-full">
+              {theme.logo_top_base64 ? (
+                <img
+                  src={theme.logo_top_base64}
+                  alt="Logo superior"
+                  className="max-h-[90px] max-w-[280px] object-contain transition-all"
+                />
+              ) : theme.logo_top_text ? (
+                <div
+                  className="text-center font-extrabold text-2xl leading-tight text-white select-none"
+                  style={{ textShadow: '0 2px 8px rgba(0,0,0,0.35)' }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(theme.logo_top_text) }}
+                />
+              ) : (
+                <div className="text-center text-white/40 text-xs font-sans italic select-none">
+                  Sin logotipo superior
                 </div>
-                <div className="w-0.5 h-20 bg-white/50" />
-                <div className="flex flex-col items-center text-white text-shadow leading-none">
-                  <span className="text-4xl">🦅</span>
-                  <span className="font-black text-xl text-[#c0392b] tracking-wider font-sans">MÉXICO</span>
-                  <span className="italic text-[9px] opacity-90 mt-1 font-sans">¡El poder de servir!</span>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
 
-          {/* Logo Inferior */}
-          <div className="text-center">
-            {theme.logo_bottom_base64 ? (
-              <img
-                src={theme.logo_bottom_base64}
-                alt="Logo inferior"
-                className="max-h-[90px] max-w-[380px] object-contain transition-all"
-              />
-            ) : (
-              /* COMPRAMEX placeholder */
-              <div className="select-none text-left">
-                <div className="font-sans font-black text-[3.2rem] tracking-wider text-shadow">
-                  <span className="text-[#2c2c2c]">COMPRA</span>
-                  <span className="text-[#c8963a]">MEX</span>
+            {/* Logo Inferior */}
+            <div className="flex items-center justify-center w-full">
+              {theme.logo_bottom_base64 ? (
+                <img
+                  src={theme.logo_bottom_base64}
+                  alt="Logo inferior"
+                  className="max-h-[85px] max-w-[280px] object-contain transition-all"
+                />
+              ) : theme.logo_bottom_text ? (
+                <div
+                  className="text-center font-extrabold text-xl leading-tight text-white select-none"
+                  style={{ textShadow: '0 2px 8px rgba(0,0,0,0.35)' }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(theme.logo_bottom_text) }}
+                />
+              ) : (
+                <div className="text-center text-white/40 text-xs font-sans italic select-none">
+                  Sin logotipo inferior
                 </div>
-                <div className="font-sans text-[#c8963a] text-xs tracking-wider border-t border-[#c8963a] pt-1.5 mt-1 text-center font-semibold">
-                  Portal Público de Compras
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>

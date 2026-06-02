@@ -13,8 +13,8 @@ const DEFAULT_THEME_STATE: Theme = {
   name_align: 'center',
   subtitle_align: 'center',
   privacy_align: 'center',
-  primary_color: '#8B3A2A',
-  hover_color: '#a04535',
+  primary_color: '#4272A5',
+  hover_color: '#2d5580',
   card_bg_color: '#FFFFFF',
   panel_bg_color: '#F6F9FD',
   bg_type: 'gradient',
@@ -29,6 +29,8 @@ const DEFAULT_THEME_STATE: Theme = {
   logos_height_pct: null,
   logo_top_base64: null,
   logo_bottom_base64: null,
+  logo_top_text: null,
+  logo_bottom_text: null,
   privacy_pdf_url: '/static/aviso_privacidad.pdf',
   is_active: true
 };
@@ -43,20 +45,70 @@ export const useTheme = () => {
 
   const isSaving = savePhase === 'saving' || savePhase === 'deploying';
 
-  const loadTheme = useCallback(async (slug: string) => {
+  const loadTheme = useCallback(async (slug: string, appSlug?: string | null) => {
     try {
       setError(null);
       setCurrentSlug(slug);
-      const data = await themesApi.getTheme(slug);
-      setTheme(data);
-      setIsDirty(false);
-      setSavePhase('idle');
-      setDeployError(null);
-    } catch (err: any) {
-      console.warn("Theme record not in DB. Initializing locally.", err);
+      
+      // Try to load the specific app theme if appSlug is provided
+      if (appSlug) {
+        try {
+          const data = await themesApi.getTheme(slug, appSlug);
+          setTheme(data);
+          setIsDirty(false);
+          setSavePhase('idle');
+          setDeployError(null);
+          return;
+        } catch (err) {
+          console.warn(`App theme for '${appSlug}' not found, falling back to global theme.`);
+          // Try to load the global flow theme
+          try {
+            const globalData = await themesApi.getTheme(slug, null);
+            // Copy global theme to start customization for this specific app
+            const newAppTheme: Theme = {
+              ...globalData,
+              authentik_app_slug: appSlug,
+              display_name: `${globalData.display_name} - ${appSlug}`
+            };
+            // Delete ID so it behaves as a new record when upserted
+            delete (newAppTheme as any).id;
+            setTheme(newAppTheme);
+            setIsDirty(true);
+            setSavePhase('idle');
+            setDeployError(null);
+            return;
+          } catch (globalErr) {
+            // Both app and global theme failed, proceed to DEFAULT_THEME_STATE
+          }
+        }
+      } else {
+        // Try to load global theme
+        try {
+          const data = await themesApi.getTheme(slug, null);
+          setTheme(data);
+          setIsDirty(false);
+          setSavePhase('idle');
+          setDeployError(null);
+          return;
+        } catch (err) {}
+      }
+
+      console.warn("Theme record not in DB. Initializing locally.");
       setTheme({
         ...DEFAULT_THEME_STATE,
         authentik_flow_slug: slug,
+        authentik_app_slug: appSlug || null,
+        display_name: slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+      });
+      setIsDirty(true);
+      setSavePhase('idle');
+      setDeployError(null);
+    } catch (err: any) {
+      console.warn("Error in loadTheme: ", err);
+      setTheme({
+        ...DEFAULT_THEME_STATE,
+        authentik_flow_slug: slug,
+        authentik_app_slug: appSlug || null,
         display_name: slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
       });
       setIsDirty(true);

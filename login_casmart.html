@@ -10,8 +10,8 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --btn-color: #8B3A2A;
-    --btn-hover: #a04535;
+    --btn-color: #4272A5;
+    --btn-hover: #2d5580;
     --font: 'Inter', sans-serif;
   }
 
@@ -121,7 +121,7 @@
     outline: none;
     transition: border-color 0.2s;
   }
-  .field-group input:focus { border-color: #8B3A2A; }
+  .field-group input:focus { border-color: #4272A5; }
   .pwd-wrap { position: relative; }
   .pwd-wrap input { padding-right: 40px; }
   .eye-btn {
@@ -169,7 +169,7 @@
     text-align: center;
     transition: text-align 0.2s;
   }
-  #privacy-link:hover { color: #8B3A2A; }
+  #privacy-link:hover { color: #4272A5; }
 
   /* ── COLUMNA LOGOS ─────────────────────────────────── */
   #logos-col {
@@ -260,7 +260,7 @@
   }
   #pdf-modal-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 20px; background: #8B3A2A; color: #fff;
+    padding: 14px 20px; background: #4272A5; color: #fff;
     font-family: var(--font); font-weight: 700; font-size: 0.95rem;
   }
   #pdf-modal-header button {
@@ -281,7 +281,7 @@
     position: fixed; top: 50%; right: 0;
     transform: translateY(-50%);
     z-index: 500;
-    background: #8B3A2A; color: #fff;
+    background: #4272A5; color: #fff;
     border: none; border-radius: 10px 0 0 10px;
     width: 38px; height: 48px;
     display: flex; align-items: center; justify-content: center;
@@ -289,7 +289,7 @@
     transition: right 0.35s, background 0.2s;
     box-shadow: -3px 0 14px rgba(0,0,0,0.2);
   }
-  #config-toggle:hover { background: #a04535; }
+  #config-toggle:hover { background: #2d5580; }
   #config-toggle svg { display: block; flex-shrink: 0; }
 
   #config-panel {
@@ -304,7 +304,7 @@
   #config-panel.open { right: 0; }
 
   #config-panel-header {
-    background: #8B3A2A; color: #fff;
+    background: #4272A5; color: #fff;
     padding: 18px 20px;
     font-family: var(--font); font-weight: 700; font-size: 0.95rem; letter-spacing: 1px;
     position: sticky; top: 0; z-index: 1;
@@ -314,7 +314,7 @@
   .cfg-section:last-child { border-bottom: none; }
   .cfg-section h3 {
     font-family: var(--font); font-size: 0.75rem; font-weight: 700;
-    color: #8B3A2A; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 14px;
+    color: #4272A5; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 14px;
   }
 
   .cfg-row { margin-bottom: 12px; }
@@ -327,8 +327,8 @@
     border: 1px solid #ccc; border-radius: 7px;
     font-family: var(--font); font-size: 0.83rem; background: #fff; outline: none;
   }
-  .cfg-row input[type="text"]:focus { border-color: #8B3A2A; }
-  .cfg-row input[type="range"] { width: 100%; accent-color: #8B3A2A; cursor: pointer; }
+  .cfg-row input[type="text"]:focus { border-color: #4272A5; }
+  .cfg-row input[type="range"] { width: 100%; accent-color: #4272A5; cursor: pointer; }
   .range-val { font-size: 0.78rem; color: #666; text-align: right; margin-top: 2px; }
 
   /* Selector de alineación con botones */
@@ -344,8 +344,8 @@
     display: flex; flex-direction: column; align-items: center; gap: 3px;
   }
   .align-btn svg { width: 18px; height: 14px; }
-  .align-btn:hover { border-color: #8B3A2A; color: #8B3A2A; }
-  .align-btn.active { background: #8B3A2A; border-color: #8B3A2A; color: #fff; }
+  .align-btn:hover { border-color: #4272A5; color: #4272A5; }
+  .align-btn.active { background: #4272A5; border-color: #4272A5; color: #fff; }
   .align-btn.active svg path { stroke: #fff; }
 
   /* Selector layout */
@@ -360,8 +360,8 @@
     transition: all 0.15s;
     display: flex; flex-direction: column; align-items: center; gap: 5px;
   }
-  .layout-btn:hover { border-color: #8B3A2A; color: #8B3A2A; }
-  .layout-btn.active { background: #8B3A2A; border-color: #8B3A2A; color: #fff; }
+  .layout-btn:hover { border-color: #4272A5; color: #4272A5; }
+  .layout-btn.active { background: #4272A5; border-color: #4272A5; color: #fff; }
 
   /* Mini diagrama layout */
   .lyt-diagram {
@@ -386,8 +386,8 @@
 
   .cfg-file-btn {
     display: inline-block; padding: 8px 14px;
-    background: #fff; border: 1px solid #8B3A2A;
-    border-radius: 7px; color: #8B3A2A;
+    background: #fff; border: 1px solid #4272A5;
+    border-radius: 7px; color: #4272A5;
     font-family: var(--font); font-size: 0.8rem; font-weight: 600;
     cursor: pointer; transition: background 0.2s;
   }
@@ -704,7 +704,7 @@
     <h3>🎨 Color del botón "Iniciar sesión"</h3>
     <div class="cfg-row">
       <div class="color-palette">
-        <button class="color-swatch active" data-color="#8B3A2A" data-hover="#a04535" style="background:#8B3A2A;" title="Vino (predeterminado)" onclick="setBtnColor(this)"></button>
+        <button class="color-swatch active" data-color="#4272A5" data-hover="#2d5580" style="background:#4272A5;" title="Civika (predeterminado)" onclick="setBtnColor(this)"></button>
         <button class="color-swatch" data-color="#1a3a6b" data-hover="#254f94" style="background:#1a3a6b;" title="Azul marino" onclick="setBtnColor(this)"></button>
         <button class="color-swatch" data-color="#1976d2" data-hover="#2196f3" style="background:#1976d2;" title="Azul institucional" onclick="setBtnColor(this)"></button>
         <button class="color-swatch" data-color="#2e7d32" data-hover="#43a047" style="background:#2e7d32;" title="Verde" onclick="setBtnColor(this)"></button>
@@ -713,8 +713,8 @@
       </div>
       <div class="cfg-file-hint" style="margin-top:8px;">O elige un color personalizado:</div>
       <div style="display:flex; align-items:center; gap:10px; margin-top:6px;">
-        <input type="color" id="color-custom-btn" value="#8B3A2A" oninput="setCustomBtnColor(this.value)" style="width:42px;height:34px;border:1px solid #ccc;border-radius:7px;cursor:pointer;padding:2px;">
-        <span id="color-custom-label" style="font-size:0.8rem;color:#666;">#8B3A2A</span>
+        <input type="color" id="color-custom-btn" value="#4272A5" oninput="setCustomBtnColor(this.value)" style="width:42px;height:34px;border:1px solid #ccc;border-radius:7px;cursor:pointer;padding:2px;">
+        <span id="color-custom-label" style="font-size:0.8rem;color:#666;">#4272A5</span>
       </div>
     </div>
   </div>

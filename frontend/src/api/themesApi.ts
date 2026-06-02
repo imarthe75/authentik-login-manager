@@ -22,8 +22,11 @@ export const themesApi = {
     return response.json();
   },
 
-  async getTheme(slug: string): Promise<Theme> {
-    const response = await fetch(`${API_BASE}/api/v1/themes/${slug}`, {
+  async getTheme(slug: string, appSlug?: string | null): Promise<Theme> {
+    const url = appSlug 
+      ? `${API_BASE}/api/v1/themes/${slug}?app_slug=${appSlug}`
+      : `${API_BASE}/api/v1/themes/${slug}`;
+    const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(),
     });

@@ -59,7 +59,7 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
       <div className="relative">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center justify-between gap-3 px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm hover:border-[#8B3A2A] focus:outline-none min-w-[260px] text-gray-800 font-medium text-sm transition-all"
+          className="flex items-center justify-between gap-3 px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm hover:border-[#4272A5] focus:outline-none min-w-[260px] text-gray-800 font-medium text-sm transition-all"
         >
           <div className="flex flex-col items-start text-left">
             <span className="text-xs text-gray-400 font-normal">Portal Activo</span>
@@ -81,14 +81,14 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
                       setIsOpen(false);
                     }}
                     className={`flex items-center justify-between w-full px-4 py-3 text-left text-sm hover:bg-gray-50 transition-colors ${
-                      t.authentik_flow_slug === currentSlug ? 'text-[#8B3A2A] font-semibold bg-red-50/30' : 'text-gray-700'
+                      t.authentik_flow_slug === currentSlug ? 'text-[#4272A5] font-semibold bg-red-50/30' : 'text-gray-700'
                     }`}
                   >
                     <div className="flex flex-col">
                       <span>{t.display_name}</span>
                       <span className="text-xs text-gray-400 font-normal">{t.authentik_flow_slug}</span>
                     </div>
-                    {t.authentik_flow_slug === currentSlug && <Check className="w-4 h-4 text-[#8B3A2A]" />}
+                    {t.authentik_flow_slug === currentSlug && <Check className="w-4 h-4 text-[#4272A5]" />}
                   </button>
                 ))}
               </div>
@@ -98,7 +98,7 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
                     setShowModal(true);
                     setIsOpen(false);
                   }}
-                  className="flex items-center justify-center gap-2 w-full py-2 bg-[#8B3A2A] text-white text-xs font-semibold rounded-lg hover:bg-[#a04535] transition-colors"
+                  className="flex items-center justify-center gap-2 w-full py-2 bg-[#4272A5] text-white text-xs font-semibold rounded-lg hover:bg-[#2d5580] transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Agregar Nuevo Portal
@@ -127,7 +127,7 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
                   placeholder="Ej. Transparencia Edomex"
                   value={newDisplayName}
                   onChange={(e) => setNewDisplayName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#8B3A2A] placeholder-gray-400"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#4272A5] placeholder-gray-400"
                 />
               </div>
 
@@ -140,7 +140,7 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
                   value={newFlowSlug}
                   onChange={(e) => handleSlugChange(e.target.value)}
                   className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none placeholder-gray-400 ${
-                    slugError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8B3A2A]'
+                    slugError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#4272A5]'
                   }`}
                 />
                 {slugError && <p className="text-red-500 text-xxs mt-1 font-semibold">{slugError}</p>}
@@ -159,7 +159,7 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#8B3A2A] text-white rounded-lg text-xs font-semibold hover:bg-[#a04535]"
+                  className="px-4 py-2 bg-[#4272A5] text-white rounded-lg text-xs font-semibold hover:bg-[#2d5580]"
                 >
                   Crear Portal
                 </button>

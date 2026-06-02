@@ -13,10 +13,11 @@ interface ConfigPanelProps {
   onSave: () => void;
   onRetryDeploy: () => void;
   authentikApps: { slug: string; name: string }[];
+  onChangeApp: (appSlug: string | null) => void;
 }
 
 const PREDEFINED_COLORS = [
-  { name: 'Vino', color: '#8B3A2A', hover: '#a04535' },
+  { name: 'Civika', color: '#4272A5', hover: '#2d5580' },
   { name: 'Marino', color: '#1a3a6b', hover: '#254f94' },
   { name: 'Azul', color: '#1976d2', hover: '#2196f3' },
   { name: 'Verde', color: '#2e7d32', hover: '#43a047' },
@@ -34,6 +35,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   onSave,
   onRetryDeploy,
   authentikApps,
+  onChangeApp,
 }) => {
   const logoTopRef = useRef<HTMLInputElement>(null);
   const logoBottomRef = useRef<HTMLInputElement>(null);
@@ -128,7 +130,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         onClick={onSave}
         disabled={!isDirty}
         className={`w-full py-3.5 text-xs font-bold tracking-widest text-white rounded-xl shadow-lg flex items-center justify-center gap-2 select-none uppercase transition-all font-sans ${
-          !isDirty ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-[#8B3A2A] hover:bg-[#a04535] cursor-pointer'
+          !isDirty ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-[#4272A5] hover:bg-[#2d5580] cursor-pointer'
         }`}
       >
         <Save className="w-4 h-4" />
@@ -140,7 +142,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   return (
     <div className="w-full h-full bg-[#f7f4f0] border-l-2 border-gray-200 flex flex-col overflow-hidden select-none">
       {/* Panel Header */}
-      <div className="bg-[#8B3A2A] text-white px-5 py-4 font-bold text-sm tracking-wide shrink-0 shadow-sm flex items-center justify-between font-sans">
+      <div className="bg-[#4272A5] text-white px-5 py-4 font-bold text-sm tracking-wide shrink-0 shadow-sm flex items-center justify-between font-sans">
         <span>⚙ PANEL DE CONFIGURACIÓN</span>
         <div className="flex items-center gap-1">
           {isDirty ? (
@@ -162,7 +164,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
         {/* 0. APPLICATION MAPPING */}
         <div className="border-b border-gray-200 pb-5">
-          <h3 className="text-xs font-bold text-[#8B3A2A] tracking-wider uppercase mb-3 font-sans">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase mb-3 font-sans">
             📱 Aplicación de Destino
           </h3>
           <label className="block text-[11px] font-semibold text-gray-600 mb-2 font-sans leading-relaxed">
@@ -170,8 +172,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
           </label>
           <select
             value={theme.authentik_app_slug || ''}
-            onChange={(e) => onUpdateField('authentik_app_slug', e.target.value || null)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:outline-none focus:border-[#8B3A2A] font-sans text-gray-700 shadow-sm"
+            onChange={(e) => onChangeApp(e.target.value || null)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:outline-none focus:border-[#4272A5] font-sans text-gray-700 shadow-sm"
           >
             <option value="">-- Sin vinculación (Diseño Global / Por Defecto) --</option>
             {authentikApps.map((app) => (
@@ -187,7 +189,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
         {/* 1. LAYOUT POSITION */}
         <div className="border-b border-gray-200 pb-5">
-          <h3 className="text-xs font-bold text-[#8B3A2A] tracking-wider uppercase mb-3.5 font-sans">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase mb-3.5 font-sans">
             📐 Distribución del layout
           </h3>
           <label className="block text-xs font-semibold text-gray-600 mb-2 font-sans">
@@ -199,13 +201,13 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 key={pos}
                 type="button"
                 onClick={() => onUpdateField('layout_position', pos)}
-                className={`py-2 px-1 border-2 rounded-xl text-[10px] font-bold text-gray-500 hover:border-[#8B3A2A] hover:text-[#8B3A2A] flex flex-col items-center gap-2 transition-all font-sans bg-white ${
-                  theme.layout_position === pos ? 'border-[#8B3A2A] bg-[#8B3A2A]/5 text-[#8B3A2A]' : 'border-gray-200'
+                className={`py-2 px-1 border-2 rounded-xl text-[10px] font-bold text-gray-500 hover:border-[#4272A5] hover:text-[#4272A5] flex flex-col items-center gap-2 transition-all font-sans bg-white ${
+                  theme.layout_position === pos ? 'border-[#4272A5] bg-[#4272A5]/5 text-[#4272A5]' : 'border-gray-200'
                 }`}
               >
                 <div
                   className={`w-11 h-7 border rounded flex items-center p-0.5 gap-0.5 ${
-                    theme.layout_position === pos ? 'border-[#8B3A2A]' : 'border-gray-300'
+                    theme.layout_position === pos ? 'border-[#4272A5]' : 'border-gray-300'
                   }`}
                   style={{
                     flexDirection: pos === 'right' ? 'row-reverse' : 'row',
@@ -223,7 +225,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
         {/* 2. TEXTS & ALIGNMENTS */}
         <div className="border-b border-gray-200 pb-5 space-y-4">
-          <h3 className="text-xs font-bold text-[#8B3A2A] tracking-wider uppercase font-sans">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase font-sans">
             📝 Textos del sistema
           </h3>
 
@@ -236,7 +238,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 type="text"
                 value={theme.system_name}
                 onChange={(e) => onUpdateField('system_name', e.target.value)}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-[#fcfbf9] focus:outline-none focus:border-[#8B3A2A] font-sans"
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-[#fcfbf9] focus:outline-none focus:border-[#4272A5] font-sans"
               />
             </div>
             <div>
@@ -247,8 +249,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     key={align}
                     type="button"
                     onClick={() => onUpdateField('name_align', align)}
-                    className={`py-1 border rounded-lg text-[10px] font-bold text-gray-500 hover:border-[#8B3A2A] hover:text-[#8B3A2A] font-sans ${
-                      theme.name_align === align ? 'border-[#8B3A2A] bg-[#8B3A2A]/5 text-[#8B3A2A]' : 'border-gray-200 bg-white'
+                    className={`py-1 border rounded-lg text-[10px] font-bold text-gray-500 hover:border-[#4272A5] hover:text-[#4272A5] font-sans ${
+                      theme.name_align === align ? 'border-[#4272A5] bg-[#4272A5]/5 text-[#4272A5]' : 'border-gray-200 bg-white'
                     }`}
                   >
                     {align === 'left' ? 'Izq' : align === 'right' ? 'Der' : 'Cen'}
@@ -265,7 +267,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 type="text"
                 value={theme.system_subtitle}
                 onChange={(e) => onUpdateField('system_subtitle', e.target.value)}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-[#fcfbf9] focus:outline-none focus:border-[#8B3A2A] font-sans"
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-[#fcfbf9] focus:outline-none focus:border-[#4272A5] font-sans"
               />
             </div>
             <div>
@@ -276,8 +278,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     key={align}
                     type="button"
                     onClick={() => onUpdateField('subtitle_align', align)}
-                    className={`py-1 border rounded-lg text-[10px] font-bold text-gray-500 hover:border-[#8B3A2A] hover:text-[#8B3A2A] font-sans ${
-                      theme.subtitle_align === align ? 'border-[#8B3A2A] bg-[#8B3A2A]/5 text-[#8B3A2A]' : 'border-gray-200 bg-white'
+                    className={`py-1 border rounded-lg text-[10px] font-bold text-gray-500 hover:border-[#4272A5] hover:text-[#4272A5] font-sans ${
+                      theme.subtitle_align === align ? 'border-[#4272A5] bg-[#4272A5]/5 text-[#4272A5]' : 'border-gray-200 bg-white'
                     }`}
                   >
                     {align === 'left' ? 'Izq' : align === 'right' ? 'Der' : 'Cen'}
@@ -290,93 +292,157 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
         {/* 3. LOGO CONTROL (TOP) */}
         <div className="border-b border-gray-200 pb-5">
-          <h3 className="text-xs font-bold text-[#8B3A2A] tracking-wider uppercase mb-3.5 font-sans">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase mb-3 font-sans">
             🖼 Logotipo superior
           </h3>
+          {/* Mode toggle */}
+          <div className="flex items-center gap-1 bg-gray-100 p-0.5 rounded-lg mb-3 w-fit">
+            {(['imagen', 'texto', 'ninguno'] as const).map((mode) => {
+              const active = mode === 'imagen' ? !!theme.logo_top_base64 : mode === 'texto' ? (!theme.logo_top_base64 && !!theme.logo_top_text) : (!theme.logo_top_base64 && !theme.logo_top_text);
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    if (mode === 'imagen') { /* handled by file input */ logoTopRef.current?.click(); }
+                    else if (mode === 'texto') { onUpdateField('logo_top_base64', null); if (!theme.logo_top_text) onUpdateField('logo_top_text', ''); }
+                    else { onUpdateField('logo_top_base64', null); onUpdateField('logo_top_text', null); }
+                  }}
+                  className={`px-3 py-1 rounded-md text-[10px] font-bold capitalize transition-all font-sans ${active ? 'bg-[#4272A5] text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                >
+                  {mode === 'imagen' ? '🖼 Imagen' : mode === 'texto' ? '✏️ Texto' : '✕ Ninguno'}
+                </button>
+              );
+            })}
+          </div>
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => logoTopRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2 border border-[#8B3A2A] rounded-lg text-xs font-semibold text-[#8B3A2A] hover:bg-[#8B3A2A]/5 cursor-pointer font-sans bg-white"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                Subir Logo
-              </button>
-              <input
-                ref={logoTopRef}
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleFileChange('logo_top_base64', e)}
-                className="hidden"
-              />
-              {theme.logo_top_base64 && (
+            {/* Image mode */}
+            {(theme.logo_top_base64 !== null || !theme.logo_top_text) && (
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => onUpdateField('logo_top_base64', null)}
-                  className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 font-sans bg-white"
+                  onClick={() => logoTopRef.current?.click()}
+                  className="flex items-center gap-2 px-4 py-2 border border-[#4272A5] rounded-lg text-xs font-semibold text-[#4272A5] hover:bg-[#4272A5]/5 cursor-pointer font-sans bg-white"
                 >
-                  <RotateCcw className="w-3 h-3" />
-                  Restaurar
+                  <Upload className="w-3.5 h-3.5" />
+                  Subir Imagen
                 </button>
-              )}
-            </div>
+                <input
+                  ref={logoTopRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileChange('logo_top_base64', e)}
+                  className="hidden"
+                />
+                {theme.logo_top_base64 && (
+                  <button
+                    type="button"
+                    onClick={() => onUpdateField('logo_top_base64', null)}
+                    className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 font-sans bg-white"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Quitar
+                  </button>
+                )}
+              </div>
+            )}
             {theme.logo_top_base64 ? (
               <div className="h-16 w-full border border-dashed border-gray-300 rounded-lg overflow-hidden bg-white p-1 flex items-center justify-center">
                 <img src={theme.logo_top_base64} alt="Preview top" className="max-h-full object-contain" />
               </div>
-            ) : (
-              <p className="text-xxs text-gray-400 font-sans">Utilizando logotipo e ícono gubernamental estándar.</p>
+            ) : theme.logo_top_text !== null && (
+              /* Text mode */
+              <div className="flex flex-col gap-1.5">
+                <textarea
+                  value={theme.logo_top_text || ''}
+                  onChange={(e) => onUpdateField('logo_top_text', e.target.value || null)}
+                  placeholder="Texto del logo superior (acepta <br>)"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-sans resize-none focus:outline-none focus:border-[#4272A5]"
+                />
+                <p className="text-[9px] text-gray-400 font-sans">Acepta HTML básico: &lt;br&gt;, &lt;b&gt;, &lt;span&gt;</p>
+              </div>
             )}
           </div>
         </div>
 
         {/* 4. LOGO CONTROL (BOTTOM) */}
         <div className="border-b border-gray-200 pb-5">
-          <h3 className="text-xs font-bold text-[#8B3A2A] tracking-wider uppercase mb-3.5 font-sans">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase mb-3 font-sans">
             🖼 Logotipo inferior
           </h3>
+          {/* Mode toggle */}
+          <div className="flex items-center gap-1 bg-gray-100 p-0.5 rounded-lg mb-3 w-fit">
+            {(['imagen', 'texto', 'ninguno'] as const).map((mode) => {
+              const active = mode === 'imagen' ? !!theme.logo_bottom_base64 : mode === 'texto' ? (!theme.logo_bottom_base64 && !!theme.logo_bottom_text) : (!theme.logo_bottom_base64 && !theme.logo_bottom_text);
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    if (mode === 'imagen') { logoBottomRef.current?.click(); }
+                    else if (mode === 'texto') { onUpdateField('logo_bottom_base64', null); if (!theme.logo_bottom_text) onUpdateField('logo_bottom_text', ''); }
+                    else { onUpdateField('logo_bottom_base64', null); onUpdateField('logo_bottom_text', null); }
+                  }}
+                  className={`px-3 py-1 rounded-md text-[10px] font-bold capitalize transition-all font-sans ${active ? 'bg-[#4272A5] text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                >
+                  {mode === 'imagen' ? '🖼 Imagen' : mode === 'texto' ? '✏️ Texto' : '✕ Ninguno'}
+                </button>
+              );
+            })}
+          </div>
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => logoBottomRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2 border border-[#8B3A2A] rounded-lg text-xs font-semibold text-[#8B3A2A] hover:bg-[#8B3A2A]/5 cursor-pointer font-sans bg-white"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                Subir Logo
-              </button>
-              <input
-                ref={logoBottomRef}
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleFileChange('logo_bottom_base64', e)}
-                className="hidden"
-              />
-              {theme.logo_bottom_base64 && (
+            {(theme.logo_bottom_base64 !== null || !theme.logo_bottom_text) && (
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => onUpdateField('logo_bottom_base64', null)}
-                  className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 font-sans bg-white"
+                  onClick={() => logoBottomRef.current?.click()}
+                  className="flex items-center gap-2 px-4 py-2 border border-[#4272A5] rounded-lg text-xs font-semibold text-[#4272A5] hover:bg-[#4272A5]/5 cursor-pointer font-sans bg-white"
                 >
-                  <RotateCcw className="w-3 h-3" />
-                  Restaurar
+                  <Upload className="w-3.5 h-3.5" />
+                  Subir Imagen
                 </button>
-              )}
-            </div>
+                <input
+                  ref={logoBottomRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileChange('logo_bottom_base64', e)}
+                  className="hidden"
+                />
+                {theme.logo_bottom_base64 && (
+                  <button
+                    type="button"
+                    onClick={() => onUpdateField('logo_bottom_base64', null)}
+                    className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 font-sans bg-white"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Quitar
+                  </button>
+                )}
+              </div>
+            )}
             {theme.logo_bottom_base64 ? (
               <div className="h-16 w-full border border-dashed border-gray-300 rounded-lg overflow-hidden bg-white p-1 flex items-center justify-center">
                 <img src={theme.logo_bottom_base64} alt="Preview bottom" className="max-h-full object-contain" />
               </div>
-            ) : (
-              <p className="text-xxs text-gray-400 font-sans">Utilizando logotipo COMPRAMEX estándar.</p>
+            ) : theme.logo_bottom_text !== null && (
+              <div className="flex flex-col gap-1.5">
+                <textarea
+                  value={theme.logo_bottom_text || ''}
+                  onChange={(e) => onUpdateField('logo_bottom_text', e.target.value || null)}
+                  placeholder="Texto del logo inferior (acepta <br>)"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-sans resize-none focus:outline-none focus:border-[#4272A5]"
+                />
+                <p className="text-[9px] text-gray-400 font-sans">Acepta HTML básico: &lt;br&gt;, &lt;b&gt;, &lt;span&gt;</p>
+              </div>
             )}
           </div>
         </div>
 
         {/* 5. BACKGROUND CHANGER */}
         <div className="border-b border-gray-200 pb-5 space-y-4">
-          <h3 className="text-xs font-bold text-[#8B3A2A] tracking-wider uppercase font-sans">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase font-sans">
             🌆 Fondo de pantalla
           </h3>
 
@@ -387,7 +453,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 type="button"
                 onClick={() => onUpdateField('bg_type', type)}
                 className={`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all font-sans ${
-                  theme.bg_type === type ? 'bg-[#8B3A2A] text-white' : 'text-gray-500 hover:text-gray-800'
+                  theme.bg_type === type ? 'bg-[#4272A5] text-white' : 'text-gray-500 hover:text-gray-800'
                 }`}
               >
                 {type === 'gradient' ? 'Gradiente' : type === 'color' ? 'Plano' : 'Imagen'}
@@ -445,7 +511,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 <button
                   type="button"
                   onClick={() => bgImgRef.current?.click()}
-                  className="flex items-center gap-2 px-3 py-1.5 border border-[#8B3A2A] rounded-lg text-[10px] font-semibold text-[#8B3A2A] hover:bg-[#8B3A2A]/5 cursor-pointer font-sans bg-white"
+                  className="flex items-center gap-2 px-3 py-1.5 border border-[#4272A5] rounded-lg text-[10px] font-semibold text-[#4272A5] hover:bg-[#4272A5]/5 cursor-pointer font-sans bg-white"
                 >
                   <Upload className="w-3 h-3" />
                   Elegir Imagen
@@ -479,14 +545,14 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
               max="100"
               value={theme.bg_opacity * 100}
               onChange={(e) => onUpdateField('bg_opacity', parseFloat(e.target.value) / 100)}
-              className="w-full accent-[#8B3A2A] cursor-pointer"
+              className="w-full accent-[#4272A5] cursor-pointer"
             />
           </div>
         </div>
 
         {/* 6. BUTTON COLOR PALETTE */}
         <div className="border-b border-gray-200 pb-5 space-y-4">
-          <h3 className="text-xs font-bold text-[#8B3A2A] tracking-wider uppercase font-sans">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase font-sans">
             🎨 Color del botón "Iniciar sesión"
           </h3>
 
@@ -529,7 +595,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
         {/* 7. FORM & LOGOS CONTAINERS OPACITY / HEIGHT */}
         <div className="border-b border-gray-200 pb-5 space-y-4">
-          <h3 className="text-xs font-bold text-[#8B3A2A] tracking-wider uppercase font-sans">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase font-sans">
             🪟 Contenedores
           </h3>
 
@@ -545,7 +611,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 max="100"
                 value={theme.form_opacity * 100}
                 onChange={(e) => onUpdateField('form_opacity', parseFloat(e.target.value) / 100)}
-                className="w-full accent-[#8B3A2A] cursor-pointer"
+                className="w-full accent-[#4272A5] cursor-pointer"
               />
             </div>
 
@@ -563,7 +629,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                   const val = parseInt(e.target.value);
                   onUpdateField('form_height_pct', val === 0 ? null : val);
                 }}
-                className="w-full accent-[#8B3A2A] cursor-pointer"
+                className="w-full accent-[#4272A5] cursor-pointer"
               />
             </div>
 
@@ -593,7 +659,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 max="100"
                 value={theme.logos_opacity * 100}
                 onChange={(e) => onUpdateField('logos_opacity', parseFloat(e.target.value) / 100)}
-                className="w-full accent-[#8B3A2A] cursor-pointer"
+                className="w-full accent-[#4272A5] cursor-pointer"
               />
             </div>
 
@@ -611,7 +677,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                   const val = parseInt(e.target.value);
                   onUpdateField('logos_height_pct', val === 0 ? null : val);
                 }}
-                className="w-full accent-[#8B3A2A] cursor-pointer"
+                className="w-full accent-[#4272A5] cursor-pointer"
               />
             </div>
 
@@ -632,7 +698,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
         {/* 8. PRIVACY MODAL PDF */}
         <div>
-          <h3 className="text-xs font-bold text-[#8B3A2A] tracking-wider uppercase mb-3 font-sans">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase mb-3 font-sans">
             📄 Aviso de Privacidad (PDF)
           </h3>
 
@@ -644,7 +710,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 placeholder="Ej. https://servicios.edomex.gob.mx/aviso.pdf"
                 value={theme.privacy_pdf_url || ''}
                 onChange={(e) => onUpdateField('privacy_pdf_url', e.target.value)}
-                className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs bg-[#fcfbf9] focus:outline-none focus:border-[#8B3A2A] font-sans"
+                className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs bg-[#fcfbf9] focus:outline-none focus:border-[#4272A5] font-sans"
               />
             </div>
 
@@ -654,7 +720,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 <button
                   type="button"
                   onClick={() => pdfRef.current?.click()}
-                  className="flex items-center gap-2 px-3 py-1.5 border border-[#8B3A2A] rounded-lg text-[10px] font-semibold text-[#8B3A2A] hover:bg-[#8B3A2A]/5 cursor-pointer font-sans bg-white"
+                  className="flex items-center gap-2 px-3 py-1.5 border border-[#4272A5] rounded-lg text-[10px] font-semibold text-[#4272A5] hover:bg-[#4272A5]/5 cursor-pointer font-sans bg-white"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   Cargar PDF
@@ -680,8 +746,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     key={align}
                     type="button"
                     onClick={() => onUpdateField('privacy_align', align)}
-                    className={`py-1 border rounded-lg text-[10px] font-bold text-gray-500 hover:border-[#8B3A2A] hover:text-[#8B3A2A] font-sans ${
-                      theme.privacy_align === align ? 'border-[#8B3A2A] bg-[#8B3A2A]/5 text-[#8B3A2A]' : 'border-gray-200 bg-white'
+                    className={`py-1 border rounded-lg text-[10px] font-bold text-gray-500 hover:border-[#4272A5] hover:text-[#4272A5] font-sans ${
+                      theme.privacy_align === align ? 'border-[#4272A5] bg-[#4272A5]/5 text-[#4272A5]' : 'border-gray-200 bg-white'
                     }`}
                   >
                     {align === 'left' ? 'Izq' : align === 'right' ? 'Der' : 'Cen'}

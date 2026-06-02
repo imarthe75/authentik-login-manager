@@ -13,8 +13,8 @@ class ThemeBase(BaseModel):
     name_align: Literal["left", "center", "right"] = "center"
     subtitle_align: Literal["left", "center", "right"] = "center"
     privacy_align: Literal["left", "center", "right"] = "center"
-    primary_color: str = Field("#8B3A2A", pattern=HEX_COLOR_REGEX)
-    hover_color: str = Field("#a04535", pattern=HEX_COLOR_REGEX)
+    primary_color: str = Field("#4272A5", pattern=HEX_COLOR_REGEX)
+    hover_color: str = Field("#2d5580", pattern=HEX_COLOR_REGEX)
     card_bg_color: str = Field("#FFFFFF", pattern=HEX_COLOR_REGEX)
     panel_bg_color: str = Field("#F6F9FD", pattern=HEX_COLOR_REGEX)
     bg_type: Literal["gradient", "color", "image"] = "gradient"
@@ -45,6 +45,8 @@ class ThemeCreate(ThemeBase):
     logo_top_base64: Optional[str] = None
     logo_bottom_base64: Optional[str] = None
     bg_image_base64: Optional[str] = None
+    logo_top_text: Optional[str] = None
+    logo_bottom_text: Optional[str] = None
 
 class ThemeUpdate(BaseModel):
     authentik_app_slug: Optional[str] = Field(None, max_length=100)
@@ -72,6 +74,8 @@ class ThemeUpdate(BaseModel):
     logo_top_base64: Optional[str] = None
     logo_bottom_base64: Optional[str] = None
     bg_image_base64: Optional[str] = None
+    logo_top_text: Optional[str] = None
+    logo_bottom_text: Optional[str] = None
     is_active: Optional[bool] = None
 
 class ThemeResponse(ThemeBase):
@@ -80,6 +84,8 @@ class ThemeResponse(ThemeBase):
     logo_top_base64: Optional[str] = None
     logo_bottom_base64: Optional[str] = None
     bg_image_base64: Optional[str] = None
+    logo_top_text: Optional[str] = None
+    logo_bottom_text: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -111,5 +117,8 @@ class ThemePublic(BaseModel):
     has_logo_top: bool
     has_logo_bottom: bool
     has_bg_image: bool
+    logo_top_text: Optional[str] = None
+    logo_bottom_text: Optional[str] = None
+    is_custom: bool = True  # False = no theme designed, use Authentik native login
 
     model_config = ConfigDict(from_attributes=True)
