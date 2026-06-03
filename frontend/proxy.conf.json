@@ -1,0 +1,7 @@
+{
+  "/api": {
+    "target": "http://casmarts-login-backend:8000",
+    "changeOrigin": true,
+    "rewrite": "(^/api) /$1"
+  }
+}

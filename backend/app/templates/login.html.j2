@@ -351,14 +351,17 @@ ak-skip-to-content {
 (function(){
 "use strict";
 var ECSS=[
-":host{position:static!important;display:block!important}",
-".pf-c-login{background:transparent!important;background-color:transparent!important;background-image:none!important;min-height:0!important;height:auto!important;display:block!important;position:static!important}",
-".pf-c-login__main,.pf-c-card,.pf-c-panel,.pf-c-panel__main,[class*='login__main'],[class*='c-card'],[class*='c-panel']{background:transparent!important;background-color:transparent!important;box-shadow:none!important;border:none!important;border-radius:0!important;max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;position:static!important;transform:none!important}",
+/* :host — anula las CSS custom properties de PatternFly EN EL HOST para que cascaden hacia abajo */
+":host{position:static!important;display:block!important;box-shadow:none!important;border:none!important;outline:none!important;--pf-c-card--BoxShadow:none;--pf-c-card--BackgroundColor:transparent;--pf-c-card--BorderRadius:0;--pf-c-login__main--BoxShadow:none;--pf-c-login__main--BackgroundColor:transparent;--pf-c-login__main--BorderRadius:0;--pf-global--BoxShadow--sm:none;--pf-global--BoxShadow--sm-top:none;--pf-global--BoxShadow--md:none;--pf-c-login--BackgroundColor:transparent}",
+".pf-c-login{background:transparent!important;background-color:transparent!important;background-image:none!important;min-height:0!important;height:auto!important;display:block!important;position:static!important;box-shadow:none!important}",
+".pf-c-login__main,.pf-c-card,.pf-c-panel,.pf-c-panel__main,[class*='login__main'],[class*='c-card'],[class*='c-panel']{background:transparent!important;background-color:transparent!important;box-shadow:none!important;border:none!important;border-radius:0!important;outline:none!important;max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;position:static!important;transform:none!important}",
+/* Eliminar pseudo-elementos que puedan aportar sombra/borde */
+".pf-c-card::before,.pf-c-card::after,.pf-c-login__main::before,.pf-c-login__main::after,.pf-c-login::before,.pf-c-login::after{display:none!important;box-shadow:none!important;border:none!important;content:none!important}",
 ".pf-c-login__main-header,[class*='main-header'],ak-brand,.pf-c-brand,h1,h2,.pf-c-title,[class*='__header'],[slot='description']{display:none!important;height:0!important;padding:0!important;margin:0!important;overflow:hidden!important}",
 ".pf-c-login__footer,.pf-c-login__main-footer-band,[class*='login__footer'],[class*='footer-band'],.pf-c-login__main-footer-band-item,ak-locale-select,[class*='locale-select']{display:none!important;height:0!important;overflow:hidden!important}",
-".pf-c-login__main-body,[class*='main-body']{padding:0!important;background:transparent!important}",
+".pf-c-login__main-body,[class*='main-body']{padding:0!important;background:transparent!important;box-shadow:none!important}",
 ".pf-c-form-control,input:not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]){border-radius:8px!important;border:1.5px solid rgba(0,0,0,0.15)!important;background:rgba(255,255,255,0.8)!important;box-shadow:none!important;max-width:100%!important}",
-".pf-c-button.pf-m-primary,button[type=submit]{background-color:[[ theme.primary_color ]]!important;border-color:[[ theme.primary_color ]]!important;border-radius:8px!important;box-shadow:none!important;width:100%!important}",
+".pf-c-button.pf-m-primary,button[type=submit]{background-color:[[ theme.primary_color ]]!important;border-color:[[ theme.primary_color ]]!important;border-radius:8px!important;box-shadow:none!important;outline:none!important;width:100%!important}",
 ".pf-c-login__main-footer,[class*='main-footer']{padding:0!important;margin-top:0.5rem!important;background:transparent!important}",
 "a{color:[[ theme.primary_color ]]!important}"
 ].join('');
@@ -644,12 +647,33 @@ new MutationObserver(function(ms){
     /* ── shadow DOM injection — sin loop infinito ───── */
     function csInjectShadow(primary, hover) {
         const CSS = `
-            .pf-c-login::before {
-                display: none !important;
-            }
+            /* ── Anular CSS Custom Props en :host para cascada completa ── */
             :host {
                 position: static !important;
                 display: block !important;
+                box-shadow: none !important;
+                border: none !important;
+                outline: none !important;
+                /* Variables PatternFly que generan sombra/borde — heredan a todos los hijos */
+                --pf-c-card--BoxShadow: none;
+                --pf-c-card--BackgroundColor: transparent;
+                --pf-c-card--BorderRadius: 0;
+                --pf-c-login__main--BoxShadow: none;
+                --pf-c-login__main--BackgroundColor: transparent;
+                --pf-c-login__main--BorderRadius: 0;
+                --pf-global--BoxShadow--sm: none;
+                --pf-global--BoxShadow--sm-top: none;
+                --pf-global--BoxShadow--md: none;
+                --pf-c-login--BackgroundColor: transparent;
+            }
+            /* Pseudo-elementos que podrían aportar borde/sombra */
+            .pf-c-login::before, .pf-c-login::after,
+            .pf-c-card::before, .pf-c-card::after,
+            .pf-c-login__main::before, .pf-c-login__main::after {
+                display: none !important;
+                box-shadow: none !important;
+                border: none !important;
+                content: none !important;
             }
             .pf-c-login {
                 background: transparent !important;
@@ -662,6 +686,7 @@ new MutationObserver(function(ms){
                 padding: 0 !important;
                 margin: 0 !important;
                 transform: none !important;
+                box-shadow: none !important;
                 box-sizing: border-box !important;
             }
             /* Nuke ALL white card wrappers, borders, shadows */
@@ -686,6 +711,7 @@ new MutationObserver(function(ms){
                 background-image: none !important;
                 border: none !important;
                 border-radius: 0 !important;
+                outline: none !important;
                 backdrop-filter: none !important;
                 -webkit-backdrop-filter: none !important;
                 margin: 0 !important;

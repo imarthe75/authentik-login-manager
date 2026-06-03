@@ -1,10 +1,18 @@
 import logging
+import re
+import ssl
+import smtplib
+import base64
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
 from typing import List, Optional, Dict
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Query
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, field_validator
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -158,10 +166,17 @@ async def upsert_theme(theme_in: ThemeCreate, db: AsyncSession = Depends(get_db)
     return _build_theme_response_with_email(db_theme, email_bodies)
 
 
+def _strip_html_tags(text: str) -> str:
+    return re.sub(r'<[^>]+>', ' ', text or '').strip()
+
+
 @router.get("/{flow_slug}/emails/preview/{event_type}", dependencies=[Depends(verify_admin_key)])
 async def preview_email(
     flow_slug: str,
     event_type: str,
+    app_slug: Optional[str] = Query(None),
+    username: Optional[str] = Query(None),
+    user_email: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
     if event_type not in EMAIL_EVENT_TYPES:
@@ -170,13 +185,26 @@ async def preview_email(
             detail=f"Invalid event_type. Must be one of: {sorted(EMAIL_EVENT_TYPES)}"
         )
 
-    result = await db.execute(
-        select(TenantTheme).where(
-            TenantTheme.authentik_flow_slug == flow_slug,
-            TenantTheme.authentik_app_slug.is_(None)
+    # Intentar tema específico de la app; si no existe, caer al global
+    theme = None
+    if app_slug:
+        result = await db.execute(
+            select(TenantTheme).where(
+                TenantTheme.authentik_flow_slug == flow_slug,
+                TenantTheme.authentik_app_slug == app_slug
+            )
         )
-    )
-    theme = result.scalar_one_or_none()
+        theme = result.scalar_one_or_none()
+
+    if theme is None:
+        result = await db.execute(
+            select(TenantTheme).where(
+                TenantTheme.authentik_flow_slug == flow_slug,
+                TenantTheme.authentik_app_slug.is_(None)
+            )
+        )
+        theme = result.scalar_one_or_none()
+
     if not theme:
         raise HTTPException(status_code=404, detail=f"Theme not found for flow '{flow_slug}'.")
 
@@ -187,24 +215,44 @@ async def preview_email(
         )
     )
     email_body = eb_result.scalar_one_or_none()
+    # Raw body from DB (may be empty — template provides defaults in that case)
     body_html = email_body.body_html if email_body else ''
     subject = email_body.subject if email_body else ''
 
-    preview_subs = {
-        '{{ url }}': 'https://preview.casmarts.example/reset/TOK-PREVIEW-12345',
-        '{{ user.username }}': 'usuario.ejemplo',
-        '{{ user.email }}': 'usuario.ejemplo@casmarts.internal',
-        '{{ token }}': 'TOK-PREVIEW-12345',
-        '{{ tenant.name }}': theme.display_name,
+    # Nombre legible del tenant: strip HTML de system_name ("CASMARTS<br>Core" → "CASMARTS Core")
+    tenant_name = _strip_html_tags(theme.system_name) or theme.display_name or 'CASMARTS'
+
+    # Logos para correos: usar base64 directamente (garantiza que funcione en todos los clientes de correo)
+    # No usar URLs públicas para correos — pueden no ser accesibles desde servidores SMTP
+    logo_url: Optional[str] = None
+    logo_base64: Optional[str] = None
+    if theme.logo_top_base64:
+        logo_base64 = theme.logo_top_base64
+        if logo_base64 and len(logo_base64.encode()) > 200 * 1024:
+            log.warning("logo_top_base64 >200 KB para flow '%s' — omitiendo del correo.", flow_slug)
+            logo_base64 = None
+
+    # Logo inferior: misma lógica
+    logo_bottom_url: Optional[str] = None
+    logo_bottom_base64: Optional[str] = None
+    if theme.logo_bottom_base64:
+        logo_bottom_base64 = theme.logo_bottom_base64
+        if logo_bottom_base64 and len(logo_bottom_base64.encode()) > 200 * 1024:
+            log.warning("logo_bottom_base64 >200 KB para flow '%s' — omitiendo del correo.", flow_slug)
+            logo_bottom_base64 = None
+
+    # Determinar el flow correcto según el evento
+    flow_map = {
+        'password_reset': 'password-recovery',
+        'email_verification': 'default-source-enrollment',
+        'new_account': 'default-source-enrollment',
+        'account_lockout': 'default-authentication-flow',
+        'security_change': 'default-user-settings-flow',
     }
-    for var, val in preview_subs.items():
-        body_html = body_html.replace(var, val)
+    flow_slug = flow_map.get(event_type, 'default-authentication-flow')
+    cta_url = f'https://auth.casmart.internal/if/flow/{flow_slug}/'
 
-    logo_base64: Optional[str] = theme.logo_top_base64
-    if logo_base64 and len(logo_base64.encode()) > 200 * 1024:
-        log.warning("logo_top_base64 exceeds 200 KB for flow '%s' — omitting from email preview.", flow_slug)
-        logo_base64 = None
-
+    # 1. Renderizar el template PRIMERO (el body por defecto puede contener variables Authentik)
     env = _build_email_jinja2_env()
     template = env.get_template(f'{event_type}.html.j2')
     html = template.render(
@@ -212,10 +260,186 @@ async def preview_email(
         body_html=body_html,
         subject=subject,
         logo_base64=logo_base64,
+        logo_url=logo_url,
+        logo_bottom_base64=logo_bottom_base64,
+        logo_bottom_url=logo_bottom_url,
         event_type=event_type,
-        cta_url='https://preview.casmarts.example/reset/TOK-PREVIEW-12345',
+        cta_url=cta_url,
+        tenant_name=tenant_name,
     )
+
+    # 2. DESPUÉS sustituir variables Authentik en el HTML completo renderizado
+    preview_subs = {
+        '{{ url }}': cta_url,
+        '{{ user.username }}': username or 'usuario.ejemplo',
+        '{{ user.email }}': user_email or 'usuario@casmarts.internal',
+        '{{ token }}': 'TOK-PREVIEW-12345',
+        '{{ tenant.name }}': tenant_name,
+    }
+    for var, val in preview_subs.items():
+        html = html.replace(var, val)
+
     return HTMLResponse(content=html)
+
+
+class TestEmailRequest(BaseModel):
+    to_email: str
+    event_type: str
+    app_slug: Optional[str] = None
+
+    @field_validator('to_email', mode='after')
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        v = v.strip().lower()
+        if '@' not in v or '.' not in v.split('@')[-1]:
+            raise ValueError('Dirección de correo inválida')
+        return v
+
+
+def _b64_to_bytes(data_url: str) -> tuple[bytes, str]:
+    m = re.match(r'data:([^;]+);base64,(.+)', data_url or '', re.S)
+    if m:
+        return base64.b64decode(m.group(2)), m.group(1)
+    return b'', 'image/png'
+
+
+def _send_smtp(to_email: str, subject: str, html: str, logo_bytes: bytes, logo_mime: str) -> None:
+    if not settings.SMTP_HOST or not settings.SMTP_USER:
+        raise ValueError("SMTP no configurado — añadir SMTP_HOST, SMTP_USER y SMTP_PASSWORD al .env")
+
+    CID = 'logo_casmarts_cid'
+    if logo_bytes:
+        html = re.sub(r'src="https://[^"]*logo_top[^"]*"', f'src="cid:{CID}"', html)
+
+    outer = MIMEMultipart('related')
+    outer['Subject'] = subject
+    outer['From'] = f'CASMARTS Core <{settings.SMTP_FROM or settings.SMTP_USER}>'
+    outer['To'] = to_email
+
+    alt = MIMEMultipart('alternative')
+    alt.attach(MIMEText(html, 'html', 'utf-8'))
+    outer.attach(alt)
+
+    if logo_bytes:
+        subtype = logo_mime.split('/')[-1] if '/' in logo_mime else 'png'
+        img = MIMEImage(logo_bytes, _subtype=subtype)
+        img.add_header('Content-ID', f'<{CID}>')
+        img.add_header('Content-Disposition', 'inline', filename=f'logo.{subtype}')
+        outer.attach(img)
+
+    ctx = ssl.create_default_context()
+    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=20) as srv:
+        srv.ehlo()
+        if settings.SMTP_TLS:
+            srv.starttls(context=ctx)
+        srv.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+        srv.sendmail(settings.SMTP_FROM or settings.SMTP_USER, [to_email], outer.as_string())
+
+
+@router.post("/{flow_slug}/emails/test", dependencies=[Depends(verify_admin_key)])
+async def send_test_email(
+    flow_slug: str,
+    body: TestEmailRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    if body.event_type not in EMAIL_EVENT_TYPES:
+        raise HTTPException(status_code=422, detail=f"event_type inválido: {body.event_type}")
+
+    # Resolver tema (app-específico con fallback a global)
+    theme = None
+    if body.app_slug:
+        r = await db.execute(select(TenantTheme).where(
+            TenantTheme.authentik_flow_slug == flow_slug,
+            TenantTheme.authentik_app_slug == body.app_slug
+        ))
+        theme = r.scalar_one_or_none()
+    if theme is None:
+        r = await db.execute(select(TenantTheme).where(
+            TenantTheme.authentik_flow_slug == flow_slug,
+            TenantTheme.authentik_app_slug.is_(None)
+        ))
+        theme = r.scalar_one_or_none()
+    if not theme:
+        raise HTTPException(status_code=404, detail=f"Tema no encontrado para flow '{flow_slug}'.")
+
+    # Cuerpo del correo desde BD (vacío → usa defaults del template)
+    eb = await db.execute(select(TenantEmailBody).where(
+        TenantEmailBody.flow_slug == flow_slug,
+        TenantEmailBody.event_type == body.event_type
+    ))
+    email_body = eb.scalar_one_or_none()
+    db_body_html = email_body.body_html if email_body else ''
+    db_subject = email_body.subject if email_body else ''
+
+    tenant_name = _strip_html_tags(theme.system_name) or theme.display_name or 'CASMARTS'
+
+    # Logo superior desde base64 del tema
+    logo_bytes, logo_mime = b'', 'image/png'
+    logo_base64: Optional[str] = None
+    if theme.logo_top_base64:
+        logo_bytes, logo_mime = _b64_to_bytes(theme.logo_top_base64)
+        logo_base64 = theme.logo_top_base64
+        if len(logo_bytes) > 200 * 1024:
+            log.warning("Logo superior >200 KB para flow '%s' — omitido del correo de prueba.", flow_slug)
+            logo_bytes = b''
+            logo_base64 = None
+
+    # Logo inferior
+    logo_bottom_base64: Optional[str] = None
+    if theme.logo_bottom_base64:
+        if len(theme.logo_bottom_base64.encode()) > 200 * 1024:
+            log.warning("Logo inferior >200 KB para flow '%s' — omitido del correo de prueba.", flow_slug)
+        else:
+            logo_bottom_base64 = theme.logo_bottom_base64
+
+    # Logo URL → None cuando hay CID (se reemplaza en _send_smtp)
+    logo_url = None
+
+    # Determinar el flow correcto según el evento
+    flow_map = {
+        'password_reset': 'password-recovery',
+        'email_verification': 'default-source-enrollment',
+        'new_account': 'default-source-enrollment',
+        'account_lockout': 'default-authentication-flow',
+        'security_change': 'default-user-settings-flow',
+    }
+    cta_url_flow = flow_map.get(body.event_type, 'default-authentication-flow')
+    cta_url = f'https://auth.casmart.internal/if/flow/{cta_url_flow}/'
+    env_j2 = _build_email_jinja2_env()
+    tmpl = env_j2.get_template(f'{body.event_type}.html.j2')
+    html = tmpl.render(
+        theme=theme,
+        body_html=db_body_html,
+        subject=db_subject,
+        logo_base64=logo_base64,
+        logo_url=logo_url,
+        logo_bottom_base64=logo_bottom_base64,
+        logo_bottom_url=None,
+        event_type=body.event_type,
+        cta_url=cta_url,
+        tenant_name=tenant_name,
+    )
+
+    # Sustituir variables Authentik con valores de preview
+    for var, val in {
+        '{{ url }}': cta_url,
+        '{{ user.username }}': str(body.to_email).split('@')[0],
+        '{{ user.email }}': str(body.to_email),
+        '{{ token }}': 'TOK-PREVIEW-12345',
+        '{{ tenant.name }}': tenant_name,
+    }.items():
+        html = html.replace(var, val)
+
+    subject_line = re.search(r'<title[^>]*>([^<]+)</title>', html, re.I)
+    subject_text = f'[TEST] {subject_line.group(1).strip()}' if subject_line else f'[TEST] Correo de prueba'
+
+    try:
+        _send_smtp(str(body.to_email), subject_text, html, logo_bytes, logo_mime)
+    except Exception as e:
+        log.error("Error enviando correo de prueba: %s", e)
+        raise HTTPException(status_code=502, detail=f"Error SMTP: {str(e)}")
+
+    return {"status": "sent", "to": str(body.to_email), "subject": subject_text}
 
 
 @router.get("/{flow_slug}", response_model=ThemeResponseWithEmail, dependencies=[Depends(verify_admin_key)])

@@ -7,29 +7,55 @@
 </head>
 <body style="margin:0; padding:0; background-color:#f4f4f4; font-family:Arial,Helvetica,sans-serif;">
 
-<!-- Outer table wrapper -->
 <table border="0" cellpadding="0" cellspacing="0" width="100%"
        style="background-color:#f4f4f4; padding:24px 0;">
   <tr>
     <td align="center" valign="top">
-
-      <!-- Email card: 600px max -->
       <table border="0" cellpadding="0" cellspacing="0" width="600"
              style="background-color:#ffffff; border-radius:6px; overflow:hidden;
                     box-shadow:0 2px 8px rgba(0,0,0,0.08);">
 
-        [% if logo_base64 %]
-        <!-- Logo header — omitted if logo_base64 is None or exceeds 200 KB -->
+        [% if logo_url %]
+        <!-- Logo superior via URL — compatible con todos los clientes de correo incluyendo Outlook -->
+        <tr>
+          <td align="center" style="padding:24px 32px 8px; background-color:#ffffff;">
+            <img src="[[ logo_url ]]"
+                 alt="[[ tenant_name or '' ]]"
+                 style="max-height:72px; max-width:260px; display:block; border:0; outline:0;" />
+          </td>
+        </tr>
+        [% elif logo_base64 %]
+        <!-- Logo superior embebido base64 — funciona en Gmail/webmail, bloqueado por Outlook por defecto -->
         <tr>
           <td align="center" style="padding:24px 32px 8px; background-color:#ffffff;">
             <img src="[[ logo_base64 ]]"
-                 alt="Logo"
+                 alt="[[ tenant_name or '' ]]"
                  style="max-height:72px; max-width:260px; display:block; border:0; outline:0;" />
           </td>
         </tr>
         [% endif %]
 
-        <!-- Primary color accent bar -->
+        [% if logo_bottom_url %]
+        <!-- Logo inferior via URL -->
+        <tr>
+          <td align="center" style="padding:0px 32px 24px; background-color:#ffffff;">
+            <img src="[[ logo_bottom_url ]]"
+                 alt="[[ tenant_name or '' ]]"
+                 style="max-height:64px; max-width:240px; display:block; border:0; outline:0;" />
+          </td>
+        </tr>
+        [% elif logo_bottom_base64 %]
+        <!-- Logo inferior embebido base64 -->
+        <tr>
+          <td align="center" style="padding:0px 32px 24px; background-color:#ffffff;">
+            <img src="[[ logo_bottom_base64 ]]"
+                 alt="[[ tenant_name or '' ]]"
+                 style="max-height:64px; max-width:240px; display:block; border:0; outline:0;" />
+          </td>
+        </tr>
+        [% endif %]
+
+        <!-- Barra de acento con color primario del tema -->
         <tr>
           <td height="4"
               style="background-color:[[ theme.primary_color ]]; font-size:0; line-height:0; mso-line-height-rule:exactly;">
@@ -37,7 +63,7 @@
           </td>
         </tr>
 
-        <!-- Main content area -->
+        <!-- Contenido principal -->
         <tr>
           <td style="padding:32px; font-size:15px; line-height:1.65; color:#333333;
                      font-family:Arial,Helvetica,sans-serif;">
@@ -46,7 +72,7 @@
         </tr>
 
         [% if cta_url %]
-        <!-- CTA Button row -->
+        <!-- Botón CTA -->
         <tr>
           <td align="center" style="padding:0 32px 24px;">
             <table border="0" cellpadding="0" cellspacing="0">
@@ -59,7 +85,6 @@
                             font-family:Arial,Helvetica,sans-serif;
                             font-size:14px; font-weight:bold; color:#ffffff;
                             text-decoration:none; border-radius:6px;
-                            mso-inner-shadow:none; border:none;
                             background-color:[[ theme.primary_color ]];">
                     Acceder
                   </a>
@@ -70,7 +95,7 @@
         </tr>
         [% endif %]
 
-        <!-- Separator -->
+        <!-- Separador -->
         <tr>
           <td style="height:1px; background-color:#eeeeee; font-size:0; line-height:0;">&nbsp;</td>
         </tr>
@@ -87,12 +112,9 @@
         </tr>
 
       </table>
-      <!-- /Email card -->
-
     </td>
   </tr>
 </table>
-<!-- /Outer wrapper -->
 
 </body>
 </html>

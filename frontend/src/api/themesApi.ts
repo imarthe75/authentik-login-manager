@@ -86,6 +86,24 @@ export const themesApi = {
     return response.json();
   },
 
+  async sendTestEmail(
+    flowSlug: string,
+    eventType: string,
+    toEmail: string,
+    appSlug?: string,
+  ): Promise<{ status: string; to: string; subject: string }> {
+    const response = await fetch(`${API_BASE}/api/v1/themes/${flowSlug}/emails/test`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ to_email: toEmail, event_type: eventType, app_slug: appSlug ?? null }),
+    });
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(detail?.detail || `Error al enviar: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
   async getEmailPreview(flowSlug: string, eventType: string): Promise<string> {
     const response = await fetch(
       `${API_BASE}/api/v1/themes/${flowSlug}/emails/preview/${eventType}`,

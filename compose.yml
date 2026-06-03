@@ -10,6 +10,12 @@ services:
       ADMIN_API_KEY: ${ADMIN_API_KEY:-casmarts_admin_super_secret_key_123}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://loginmanager.casmart.internal,https://auth.casmart.internal,http://localhost:3000,http://127.0.0.1:3000}
       PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-https://loginmanager.casmart.internal}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_TLS: ${SMTP_TLS:-true}
     ports:
       - "8000:8000"
     volumes:

@@ -1,7 +1,8 @@
 import React, { useRef } from 'react';
 import { Upload, RotateCcw, Save, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
-import { Theme } from '../types/theme';
+import { Theme, EmailBody } from '../types/theme';
 import { SavePhase } from '../hooks/useTheme';
+import { AccessAndNotificationsTab } from './tabs/AccessAndNotificationsTab';
 
 interface ConfigPanelProps {
   theme: Theme;
@@ -14,6 +15,7 @@ interface ConfigPanelProps {
   onRetryDeploy: () => void;
   authentikApps: { slug: string; name: string }[];
   onChangeApp: (appSlug: string | null) => void;
+  onUpdateEmailBody: (eventType: string, body: EmailBody) => void;
 }
 
 const PREDEFINED_COLORS = [
@@ -36,6 +38,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   onRetryDeploy,
   authentikApps,
   onChangeApp,
+  onUpdateEmailBody,
 }) => {
   const logoTopRef = useRef<HTMLInputElement>(null);
   const logoBottomRef = useRef<HTMLInputElement>(null);
@@ -756,6 +759,18 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
               </div>
             </div>
           </div>
+        </div>
+
+        {/* 8. ACCESS & NOTIFICATIONS */}
+        <div className="border-b border-gray-200 pb-5">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase mb-3 font-sans">
+            🔔 Accesos y Notificaciones
+          </h3>
+          <AccessAndNotificationsTab
+            theme={theme}
+            onUpdateField={onUpdateField}
+            onUpdateEmailBody={onUpdateEmailBody}
+          />
         </div>
 
       </div>

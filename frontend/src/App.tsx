@@ -16,6 +16,7 @@ export const App: React.FC = () => {
     error,
     loadTheme,
     updateField,
+    updateEmailBody,
     uploadFileField,
     saveTheme,
     retryDeploy,
@@ -80,8 +81,18 @@ export const App: React.FC = () => {
           logos_height_pct: null,
           logo_top_base64: null,
           logo_bottom_base64: null,
+          logo_top_text: null,
+          logo_bottom_text: null,
           privacy_pdf_url: '/static/aviso_privacidad.pdf',
-          is_active: true
+          is_active: true,
+          allow_self_registration: false,
+          require_email_verification: false,
+          show_social_google: false,
+          show_social_microsoft: false,
+          show_social_gov_id: false,
+          email_footer_text: null,
+          email_template_type: 'integrated',
+          email_bodies: {},
         };
         setThemesList([seedTheme]);
         setTheme(seedTheme);
@@ -142,8 +153,18 @@ export const App: React.FC = () => {
       logos_height_pct: null,
       logo_top_base64: null,
       logo_bottom_base64: null,
+      logo_top_text: null,
+      logo_bottom_text: null,
       privacy_pdf_url: '/static/aviso_privacidad.pdf',
-      is_active: true
+      is_active: true,
+      allow_self_registration: false,
+      require_email_verification: false,
+      show_social_google: false,
+      show_social_microsoft: false,
+      show_social_gov_id: false,
+      email_footer_text: null,
+      email_template_type: 'integrated',
+      email_bodies: {},
     };
     
     // Add to dropdown list and set as current
@@ -214,6 +235,7 @@ export const App: React.FC = () => {
             onRetryDeploy={retryDeploy}
             authentikApps={authentikApps}
             onChangeApp={handleChangeApp}
+            onUpdateEmailBody={updateEmailBody}
           />
         </section>
       </main>

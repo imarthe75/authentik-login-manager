@@ -13,5 +13,12 @@ export default defineConfig({
     watch: {
       usePolling: true,
     },
+    proxy: {
+      '/api': {
+        target: 'http://casmarts-login-backend:8000',
+        changeOrigin: true,
+        rewrite: (path) => path,
+      }
+    },
   },
 });

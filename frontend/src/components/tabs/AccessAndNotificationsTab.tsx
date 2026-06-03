@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Theme, EmailEventType, EmailBody, EMAIL_EVENT_TYPES, EMAIL_EVENT_LABELS, EMPTY_EMAIL_BODY } from '../../types/theme';
+import { themesApi } from '../../api/themesApi';
 
 // ── Inline SVG icons for social providers ─────────────────────────────────
 
@@ -90,6 +91,9 @@ export const AccessAndNotificationsTab: React.FC<Props> = ({
 }) => {
   const [activeEvent, setActiveEvent] = useState<EmailEventType>('password_reset');
   const [copiedVar, setCopiedVar] = useState<string | null>(null);
+  const [testEmail, setTestEmail] = useState('');
+  const [testStatus, setTestStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [testSending, setTestSending] = useState(false);
 
   const currentBody: EmailBody = theme.email_bodies?.[activeEvent] ?? { ...EMPTY_EMAIL_BODY };
 
@@ -97,6 +101,25 @@ export const AccessAndNotificationsTab: React.FC<Props> = ({
     navigator.clipboard.writeText(v).catch(() => {});
     setCopiedVar(v);
     setTimeout(() => setCopiedVar(null), 1500);
+  };
+
+  const handleSendTest = async () => {
+    if (!testEmail.trim()) return;
+    setTestSending(true);
+    setTestStatus(null);
+    try {
+      await themesApi.sendTestEmail(
+        theme.authentik_flow_slug,
+        activeEvent,
+        testEmail.trim(),
+        theme.authentik_app_slug ?? undefined,
+      );
+      setTestStatus({ ok: true, msg: `✅ Enviado a ${testEmail}` });
+    } catch (err: any) {
+      setTestStatus({ ok: false, msg: `❌ ${err?.message ?? 'Error al enviar'}` });
+    } finally {
+      setTestSending(false);
+    }
   };
 
   const handleBodyChange = (field: keyof EmailBody, value: string) => {
@@ -264,7 +287,7 @@ export const AccessAndNotificationsTab: React.FC<Props> = ({
           </div>
 
           {/* Variable guide */}
-          <div className="px-4 pb-4 pt-2">
+          <div className="px-4 pb-3 pt-2">
             <p className="text-xs font-semibold text-gray-500 mb-2">Variables disponibles (clic para copiar)</p>
             <div className="flex flex-wrap gap-1.5">
               {VARIABLE_GUIDE.map(({ var: v, desc }) => (
@@ -283,6 +306,39 @@ export const AccessAndNotificationsTab: React.FC<Props> = ({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Envío de correo de prueba */}
+          <div className="px-4 pb-4 pt-3 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-600 mb-2">
+              Correo de prueba
+              <span className="ml-1.5 text-gray-400 font-normal">
+                — {EMAIL_EVENT_LABELS[activeEvent]}
+              </span>
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={testEmail}
+                onChange={e => { setTestEmail(e.target.value); setTestStatus(null); }}
+                onKeyDown={e => e.key === 'Enter' && handleSendTest()}
+                placeholder="destinatario@ejemplo.com"
+                className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <button
+                type="button"
+                onClick={handleSendTest}
+                disabled={testSending || !testEmail.trim()}
+                className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+              >
+                {testSending ? 'Enviando…' : '✉ Enviar prueba'}
+              </button>
+            </div>
+            {testStatus && (
+              <p className={`text-xs mt-1.5 font-medium ${testStatus.ok ? 'text-green-600' : 'text-red-600'}`}>
+                {testStatus.msg}
+              </p>
+            )}
           </div>
         </div>
       </section>

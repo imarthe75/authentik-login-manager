@@ -5,12 +5,12 @@ import { themesApi } from '../../api/themesApi';
 interface EmailPreviewProps {
   flowSlug: string;
   eventType: EmailEventType;
-  /** Incremented by the parent when email_bodies are saved, to trigger refresh */
   refreshKey?: number;
 }
 
 export const EmailPreview: React.FC<EmailPreviewProps> = ({ flowSlug, eventType, refreshKey }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const blobUrlRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subject, setSubject] = useState<string>('');
@@ -20,18 +20,23 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({ flowSlug, eventType,
     setError(null);
     try {
       const html = await themesApi.getEmailPreview(flowSlug, eventType);
+
       // Extract subject from <title> tag for inbox simulation
       const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-      setSubject(titleMatch?.[1] ?? EMAIL_EVENT_LABELS[eventType]);
-      // Write HTML into sandboxed iframe
-      const iframe = iframeRef.current;
-      if (iframe) {
-        const doc = iframe.contentDocument || iframe.contentWindow?.document;
-        if (doc) {
-          doc.open();
-          doc.write(html);
-          doc.close();
-        }
+      setSubject(titleMatch?.[1]?.trim() ?? EMAIL_EVENT_LABELS[eventType]);
+
+      // Revoke previous blob URL to avoid memory leaks
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+      }
+
+      // Use a blob: URL instead of doc.write() — avoids sandbox "allow-scripts" requirement
+      const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      blobUrlRef.current = url;
+
+      if (iframeRef.current) {
+        iframeRef.current.src = url;
       }
     } catch (err: any) {
       setError(err?.message ?? 'Error al cargar la vista previa del correo.');
@@ -42,6 +47,12 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({ flowSlug, eventType,
 
   useEffect(() => {
     loadPreview();
+    return () => {
+      // Cleanup blob URL on unmount
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+      }
+    };
   }, [loadPreview, refreshKey]);
 
   return (
@@ -54,13 +65,14 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({ flowSlug, eventType,
         <div className="min-w-0">
           <p className="text-xs font-semibold text-gray-800 truncate">noreply@casmarts.internal</p>
           <p className="text-sm font-medium text-gray-900 truncate">
-            {loading ? 'Cargando…' : subject}
+            {loading ? 'Cargando…' : (subject || EMAIL_EVENT_LABELS[eventType])}
           </p>
         </div>
         <button
           type="button"
           onClick={loadPreview}
-          className="ml-auto shrink-0 text-xs text-gray-500 hover:text-blue-600 border border-gray-300 hover:border-blue-400 rounded px-2 py-1 transition-colors"
+          disabled={loading}
+          className="ml-auto shrink-0 text-xs text-gray-500 hover:text-blue-600 border border-gray-300 hover:border-blue-400 rounded px-2 py-1 transition-colors disabled:opacity-40"
           title="Recargar vista previa"
         >
           ↻ Actualizar
@@ -75,10 +87,11 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({ flowSlug, eventType,
           </div>
         )}
         {error && (
-          <div className="absolute inset-0 flex items-center justify-center p-6 z-10">
+          <div className="absolute inset-0 flex items-center justify-center p-6 z-10 bg-white">
             <p className="text-sm text-red-600 text-center">{error}</p>
           </div>
         )}
+        {/* blob: src avoids sandbox script-blocking issue; allow-same-origin needed for blob: */}
         <iframe
           ref={iframeRef}
           title={`Vista previa: ${EMAIL_EVENT_LABELS[eventType]}`}
