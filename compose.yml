@@ -16,13 +16,14 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_TLS: ${SMTP_TLS:-true}
-    ports:
-      - "8000:8000"
+#    ports:
+#      - "8000:8000"
     volumes:
       - ./backend:/app
       - ../core-casmarts/data/authentik/custom-templates:/shared/authentik/templates
     networks:
       - aura-network
+      - identity-network
     restart: always
 
   frontend:
@@ -46,4 +47,6 @@ services:
 
 networks:
   aura-network:
+    external: true
+  identity-network:
     external: true

@@ -14,6 +14,12 @@
 </script>
 {% endif %}
 {% include "base/header_js.html" %}
+<script data-id="force-spanish-locale">
+    "use strict";
+    if (window.authentik) {
+        window.authentik.locale = "es";
+    }
+</script>
 <script data-id="flow-config">
     "use strict";
     window.authentik.flow = { "layout": "{{ flow.layout }}" };
@@ -74,7 +80,7 @@ body {
     z-index: 2;
     
     /* Estilo de tarjeta única unificada */
-    background: var(--cs-card-bg);
+    background: transparent !important;
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1.5px solid rgba(255, 255, 255, 0.6);
@@ -125,7 +131,7 @@ body {
     justify-content: flex-start;
     padding: 24px 28px;
     overflow: hidden;
-    background: transparent;
+    background: var(--cs-card-bg);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     border-radius: 0;
@@ -242,7 +248,7 @@ ak-skip-to-content {
     justify-content: center;
     gap: 32px;
     padding: 36px;
-    background: rgba([[ theme.panel_bg_color | hex_to_rgb ]], 0.35);
+    background: rgba([[ theme.panel_bg_color | hex_to_rgb ]], [[ theme.logos_opacity ]]);
     border-radius: 0;
     box-shadow: none;
     overflow: hidden;
@@ -354,35 +360,82 @@ var ECSS=[
 /* :host — anula las CSS custom properties de PatternFly EN EL HOST para que cascaden hacia abajo */
 ":host{position:static!important;display:block!important;box-shadow:none!important;border:none!important;outline:none!important;--pf-c-card--BoxShadow:none;--pf-c-card--BackgroundColor:transparent;--pf-c-card--BorderRadius:0;--pf-c-login__main--BoxShadow:none;--pf-c-login__main--BackgroundColor:transparent;--pf-c-login__main--BorderRadius:0;--pf-global--BoxShadow--sm:none;--pf-global--BoxShadow--sm-top:none;--pf-global--BoxShadow--md:none;--pf-c-login--BackgroundColor:transparent}",
 ".pf-c-login{background:transparent!important;background-color:transparent!important;background-image:none!important;min-height:0!important;height:auto!important;display:block!important;position:static!important;box-shadow:none!important}",
-".pf-c-login__main,.pf-c-card,.pf-c-panel,.pf-c-panel__main,[class*='login__main'],[class*='c-card'],[class*='c-panel']{background:transparent!important;background-color:transparent!important;box-shadow:none!important;border:none!important;border-radius:0!important;outline:none!important;max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;position:static!important;transform:none!important}",
+".pf-c-panel,.pf-c-panel__main,[class*='c-panel']{background:transparent!important;background-color:transparent!important;box-shadow:none!important;border:none!important;border-radius:0!important;outline:none!important;max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;position:static!important;transform:none!important}",
+".pf-c-login__main,.pf-c-card{background:transparent!important;background-color:transparent!important;box-shadow:none!important;border:none!important;border-radius:0!important;width:360px!important;max-width:100%!important;min-height:auto!important;margin:0 auto!important;padding:0!important;display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:stretch!important;box-sizing:border-box!important;transform:none!important}",
 /* Eliminar pseudo-elementos que puedan aportar sombra/borde */
 ".pf-c-card::before,.pf-c-card::after,.pf-c-login__main::before,.pf-c-login__main::after,.pf-c-login::before,.pf-c-login::after{display:none!important;box-shadow:none!important;border:none!important;content:none!important}",
-".pf-c-login__main-header,[class*='main-header'],ak-brand,.pf-c-brand,h1,h2,.pf-c-title,[class*='__header'],[slot='description']{display:none!important;height:0!important;padding:0!important;margin:0!important;overflow:hidden!important}",
-".pf-c-login__footer,.pf-c-login__main-footer-band,[class*='login__footer'],[class*='footer-band'],.pf-c-login__main-footer-band-item,ak-locale-select,[class*='locale-select']{display:none!important;height:0!important;overflow:hidden!important}",
-".pf-c-login__main-body,[class*='main-body']{padding:0!important;background:transparent!important;box-shadow:none!important}",
+".pf-c-login__main-header,[class*='main-header'],ak-brand,.pf-c-brand,h1,h2,.pf-c-title,[class*='__header'],[slot='description'],ak-stage-identification p:not(.pf-c-form__helper-text),.pf-c-login__main-body > p{display:none!important;height:0!important;padding:0!important;margin:0!important;overflow:hidden!important}",
+".pf-c-login__footer,ak-locale-select,[class*='locale-select']{display:none!important;height:0!important;overflow:hidden!important}",
+".pf-c-login__main-body,[class*='main-body']{padding:0!important;background:transparent!important;box-shadow:none!important;width:100%!important;display:flex!important;flex-direction:column!important;justify-content:center!important}",
 ".pf-c-form-control,input:not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]){border-radius:8px!important;border:1.5px solid rgba(0,0,0,0.15)!important;background:rgba(255,255,255,0.8)!important;box-shadow:none!important;max-width:100%!important}",
 ".pf-c-button.pf-m-primary,button[type=submit]{background-color:[[ theme.primary_color ]]!important;border-color:[[ theme.primary_color ]]!important;border-radius:8px!important;box-shadow:none!important;outline:none!important;width:100%!important}",
 ".pf-c-login__main-footer,[class*='main-footer']{padding:0!important;margin-top:0.5rem!important;background:transparent!important}",
 "a{color:[[ theme.primary_color ]]!important}"
 ].join('');
 
+var TRANSLATIONS = {
+    "enter the email address or username associated with your account.": "Introduzca la dirección de correo electrónico o nombre de usuario asociado con su cuenta.",
+    "password recovery": "Recuperación de contraseña",
+    "enter your username or email address.": "Introduzca su nombre de usuario o correo electrónico."
+};
+
+function translateNode(node) {
+    if (!node) return;
+    if (node.nodeType === 3) {
+        var txt = node.nodeValue.trim().toLowerCase().replace(/\s+/g, ' ');
+        for (var key in TRANSLATIONS) {
+            if (txt === key || txt === key.replace(/\.$/, '') || txt.replace(/\.$/, '') === key) {
+                node.nodeValue = TRANSLATIONS[key];
+                break;
+            }
+        }
+    } else if (node.nodeType === 1) {
+        if (node.placeholder) {
+            var pl = node.placeholder.trim().toLowerCase();
+            if (TRANSLATIONS[pl]) {
+                node.placeholder = TRANSLATIONS[pl];
+            }
+        }
+        for (var i = 0; i < node.childNodes.length; i++) {
+            translateNode(node.childNodes[i]);
+        }
+        if (node.shadowRoot) {
+            translateNode(node.shadowRoot);
+        }
+    }
+}
+
 function inject(root){
     if(!root||!root.appendChild)return;
     var ex=root.querySelector&&root.querySelector('#cs-intercept');
-    if(ex){ex.textContent=ECSS;return;}
-    var s=document.createElement('style');
-    s.id='cs-intercept';
-    s.textContent=ECSS;
-    root.appendChild(s);
-    new MutationObserver(function(ms){
-        ms.forEach(function(m){
-            m.addedNodes.forEach(function(n){
-                if(n.nodeType!==1)return;
-                if(n.shadowRoot)inject(n.shadowRoot);
-                if(n.querySelectorAll)n.querySelectorAll('*').forEach(function(e){if(e.shadowRoot)inject(e.shadowRoot);});
+    if(ex){
+        ex.textContent=ECSS;
+    } else {
+        var s=document.createElement('style');
+        s.id='cs-intercept';
+        s.textContent=ECSS;
+        root.appendChild(s);
+        new MutationObserver(function(ms){
+            ms.forEach(function(m){
+                if (m.type === 'characterData') {
+                    translateNode(m.target);
+                } else {
+                    m.addedNodes.forEach(function(n){
+                        translateNode(n);
+                        if(n.nodeType!==1)return;
+                        if(n.shadowRoot)inject(n.shadowRoot);
+                        if(n.querySelectorAll)n.querySelectorAll('*').forEach(function(e){if(e.shadowRoot)inject(e.shadowRoot);});
+                    });
+                }
             });
+        }).observe(root,{childList:true,subtree:true,characterData:true});
+    }
+    if(root.querySelectorAll) {
+        root.querySelectorAll('*').forEach(function(e){
+            if(e.shadowRoot) inject(e.shadowRoot);
         });
-    }).observe(root,{childList:true,subtree:true});
+    }
+    translateNode(root);
 }
 
 // Interceptar customElements.define para parchear connectedCallback ANTES del primer render
@@ -409,13 +462,18 @@ if(typeof customElements!=='undefined'){
 // Observer en document para elementos que se agreguen después
 new MutationObserver(function(ms){
     ms.forEach(function(m){
-        m.addedNodes.forEach(function(n){
-            if(n.nodeType!==1)return;
-            if(n.shadowRoot)inject(n.shadowRoot);
-            if(n.querySelectorAll)n.querySelectorAll('*').forEach(function(e){if(e.shadowRoot)inject(e.shadowRoot);});
-        });
+        if (m.type === 'characterData') {
+            translateNode(m.target);
+        } else {
+            m.addedNodes.forEach(function(n){
+                translateNode(n);
+                if(n.nodeType!==1)return;
+                if(n.shadowRoot)inject(n.shadowRoot);
+                if(n.querySelectorAll)n.querySelectorAll('*').forEach(function(e){if(e.shadowRoot)inject(e.shadowRoot);});
+            });
+        }
     });
-}).observe(document.documentElement,{childList:true,subtree:true});
+}).observe(document.documentElement,{childList:true,subtree:true,characterData:true});
 })();
 </script>
 {% endblock %}
@@ -689,17 +747,9 @@ new MutationObserver(function(ms){
                 box-shadow: none !important;
                 box-sizing: border-box !important;
             }
-            /* Nuke ALL white card wrappers, borders, shadows */
-            :host,
-            .pf-c-login,
-            .pf-c-login__main,
-            .pf-c-login__main-body,
-            .pf-c-login__main-header,
-            .pf-c-card,
+            /* Estilo de los paneles e interfaces */
             .pf-c-panel,
             .pf-c-panel__main,
-            [class*="login__main"],
-            [class*="c-card"],
             [class*="c-panel"] {
                 position: static !important;
                 transform: none !important;
@@ -717,9 +767,34 @@ new MutationObserver(function(ms){
                 margin: 0 !important;
                 padding: 0 !important;
             }
-            /* Restaurar padding al body del formulario para que no se vea apretado */
+            /* Estilo del card/login principal con tamaño fijo, centrado y transparente */
+            .pf-c-login__main,
+            .pf-c-card {
+                background: transparent !important;
+                background-color: transparent !important;
+                box-shadow: none !important;
+                border: none !important;
+                border-radius: 0 !important;
+                width: 360px !important;
+                max-width: 100% !important;
+                min-height: auto !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: center !important;
+                align-items: stretch !important;
+                box-sizing: border-box !important;
+                transform: none !important;
+            }
+            /* Restaurar padding al body del formulario y forzar ancho total */
             .pf-c-login__main-body, [class*="main-body"] {
                 padding: 0 !important;
+                background: transparent !important;
+                width: 100% !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: center !important;
             }
             /* ── Ocultar cabecera nativa (título, brand) ── */
             .pf-c-login__main-header,
@@ -729,19 +804,16 @@ new MutationObserver(function(ms){
             h1, h2,
             .pf-c-title,
             [class*="__header"],
-            [slot="description"] {
+            [slot="description"],
+            ak-stage-identification p:not(.pf-c-form__helper-text),
+            .pf-c-login__main-body > p {
                 display: none !important;
                 height: 0 !important;
                 padding: 0 !important;
                 margin: 0 !important;
                 overflow: hidden !important;
             }
-            /* ── Ocultar footer nativo (Aviso de Privacidad, Powered by authentik) ── */
-            .pf-c-login__footer,
-            .pf-c-login__main-footer-band,
-            [class*="login__footer"],
-            [class*="footer-band"],
-            .pf-c-login__main-footer-band-item {
+            .pf-c-login__footer {
                 display: none !important;
                 height: 0 !important;
                 padding: 0 !important;

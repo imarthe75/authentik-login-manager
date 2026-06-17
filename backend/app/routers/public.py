@@ -4,17 +4,25 @@ import re
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.future import select
+from sqlalchemy import text
 from app.database import get_db
 from app.models.tenant_theme import TenantTheme
 from app.schemas.theme import ThemePublic
 from app.cache import cache
+from app.config import settings
 
 logger = logging.getLogger("authentik_login_manager.public")
 logger.setLevel(logging.INFO)
 
 router = APIRouter(prefix="/api/v1/public", tags=["Public Themes"])
+
+authentik_engine = create_async_engine(
+    settings.DATABASE_URL.replace("authentik_login_manager", "authentik"),
+    echo=False,
+    pool_pre_ping=True
+)
 
 # Generic default fallback theme config
 DEFAULT_THEME = {
@@ -47,12 +55,36 @@ DEFAULT_THEME = {
     "logo_bottom_text": None
 }
 
+async def resolve_app_slug(app: Optional[str]) -> Optional[str]:
+    if not app:
+        return None
+    try:
+        async with authentik_engine.connect() as conn:
+            query = text("""
+                SELECT app.slug 
+                FROM authentik_core_application app
+                JOIN authentik_providers_oauth2_oauth2provider prov ON app.provider_id = prov.provider_ptr_id
+                WHERE prov.client_id = :client_id
+                LIMIT 1;
+            """)
+            res = await conn.execute(query, {"client_id": app})
+            row = res.fetchone()
+            if row:
+                logger.info(f"Resolved app client_id='{app}' to app_slug='{row[0]}'")
+                return row[0]
+    except Exception as e:
+        logger.error(f"Error resolving client_id to app slug: {e}")
+    return app
+
 @router.get("/theme/{flow_slug}", response_model=ThemePublic)
 async def get_public_theme(
     flow_slug: str,
     app: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
+    if app:
+        app = await resolve_app_slug(app)
+        
     cache_key = f"theme:{flow_slug}:{app or 'global'}"
     logger.info(f"Retrieving public theme for flow_slug='{flow_slug}', app='{app or 'global'}'")
     
@@ -144,6 +176,9 @@ async def get_theme_image(
     app: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
+    if app:
+        app = await resolve_app_slug(app)
+        
     logger.info(f"Retrieving theme image for flow_slug='{flow_slug}', field='{field}', app='{app or 'global'}'")
     if field not in ["logo_top", "logo_bottom", "bg_image"]:
         logger.error(f"Invalid image field requested: '{field}'")
