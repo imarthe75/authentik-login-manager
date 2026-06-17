@@ -368,6 +368,10 @@ var ECSS=[
 
 function inject(root){
     if(!root||!root.appendChild)return;
+    var hostTag = root.host ? root.host.tagName.toLowerCase() : '';
+    if (root.host && hostTag !== 'ak-flow-executor' && hostTag !== 'ak-stage-identification' && hostTag !== 'ak-stage-password' && hostTag !== 'ak-stage-authenticator-validate') {
+        return;
+    }
     var ex=root.querySelector&&root.querySelector('#cs-intercept');
     if(ex){ex.textContent=ECSS;return;}
     var s=document.createElement('style');
