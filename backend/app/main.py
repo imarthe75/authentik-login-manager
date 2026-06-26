@@ -1,6 +1,8 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, status
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base
@@ -46,6 +48,20 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-Admin-Key", "Authorization"],
 )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    try:
+        body = await request.body()
+        import json as _json
+        parsed = _json.loads(body)
+        # Log only non-binary fields to avoid huge base64 dumps
+        safe = {k: v for k, v in parsed.items() if not isinstance(v, str) or len(v) < 200}
+        logger.error("422 on %s %s | errors=%s | body_safe=%s",
+                     request.method, request.url.path, exc.errors(), safe)
+    except Exception:
+        logger.error("422 on %s %s | errors=%s", request.method, request.url.path, exc.errors())
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 # Include Routers
 app.include_router(admin.router)

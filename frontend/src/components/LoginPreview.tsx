@@ -115,6 +115,7 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme, emailPreviewR
             flowSlug={theme.authentik_flow_slug}
             eventType={activeEmailEvent}
             refreshKey={emailPreviewRefreshKey}
+            liveBodyHtml={theme.email_bodies?.[activeEmailEvent]?.body_html}
           />
         </div>
       </div>
@@ -180,40 +181,52 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme, emailPreviewR
             className="w-[390px] shrink-0 px-9 py-8 flex flex-col justify-center overflow-y-auto"
             style={{ background: 'transparent', height: '100%' }}
           >
-            <div
-              className="font-extrabold text-3xl leading-none text-gray-900 mb-1.5 font-sans"
-              style={{ textAlign: theme.name_align }}
-              dangerouslySetInnerHTML={{ __html: sanitizedSysName }}
-            />
-            <div className="text-sm text-gray-700 mb-5 font-sans" style={{ textAlign: theme.subtitle_align }}>
-              {theme.system_subtitle}
-            </div>
+            {theme.show_system_name && (
+              <div
+                className="font-extrabold text-3xl leading-none text-gray-900 mb-1.5 font-sans"
+                style={{ textAlign: theme.name_align }}
+                dangerouslySetInnerHTML={{ __html: sanitizedSysName }}
+              />
+            )}
+            {theme.show_system_subtitle && (
+              <div className="text-sm text-gray-700 mb-5 font-sans" style={{ textAlign: theme.subtitle_align }}>
+                {theme.system_subtitle}
+              </div>
+            )}
 
             {/* User input */}
             <div className="mb-3 text-left">
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5 font-sans">
-                Usuario / Correo electrónico
-              </label>
+              {theme.show_field_labels && (
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5 font-sans">
+                  Usuario / Correo electrónico
+                </label>
+              )}
               <input type="text" disabled placeholder="usuario@casmarts.com"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white/80 outline-none text-gray-400 font-sans cursor-not-allowed" />
             </div>
 
             {/* Password input */}
             <div className="mb-3 text-left">
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5 font-sans">Contraseña</label>
+              {theme.show_field_labels && (
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5 font-sans">Contraseña</label>
+              )}
               <div className="relative">
                 <input type={showPwd ? 'text' : 'password'} disabled value="supersecretpassword"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white/80 outline-none text-gray-400 font-sans cursor-not-allowed pr-10" />
-                <button type="button" onClick={() => setShowPwd(!showPwd)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                  {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+                {theme.show_password_toggle && (
+                  <button type="button" onClick={() => setShowPwd(!showPwd)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="text-center text-xs text-gray-600 font-sans cursor-not-allowed mb-4 hover:underline">
-              ¿Olvidaste tu contraseña?
-            </div>
+            {theme.show_forgot_password && (
+              <div className="text-center text-xs text-gray-600 font-sans cursor-not-allowed mb-4 hover:underline">
+                ¿Olvidaste tu contraseña?
+              </div>
+            )}
 
             {/* Login button */}
             <button type="button" disabled
@@ -274,7 +287,7 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme, emailPreviewR
           </div>
 
           {/* LOGOS PANEL */}
-          <div
+          {theme.show_logos_panel && <div
             className="flex-1 flex flex-col items-center justify-center gap-8 px-9 py-10 overflow-hidden transition-all duration-300"
             style={{
               background: hexToRgba(theme.panel_bg_color || '#F6F9FD', theme.logos_opacity ?? 0.55),
@@ -307,7 +320,7 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme, emailPreviewR
                 <div className="text-center text-white/40 text-xs font-sans italic select-none">Sin logotipo inferior</div>
               )}
             </div>
-          </div>
+          </div>}
         </div>
       </div>
 

@@ -1,4 +1,14 @@
 import React, { useRef } from 'react';
+
+// Darkens a #RRGGBB hex color by `amount` (0–1)
+const darkenHex = (hex: string, amount = 0.2): string => {
+  const h = hex.replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return hex;
+  const r = Math.max(0, Math.round(parseInt(h.slice(0, 2), 16) * (1 - amount)));
+  const g = Math.max(0, Math.round(parseInt(h.slice(2, 4), 16) * (1 - amount)));
+  const b = Math.max(0, Math.round(parseInt(h.slice(4, 6), 16) * (1 - amount)));
+  return '#' + [r, g, b].map(n => n.toString(16).padStart(2, '0')).join('');
+};
 import { Upload, RotateCcw, Save, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { Theme, EmailBody } from '../types/theme';
 import { SavePhase } from '../hooks/useTheme';
@@ -587,7 +597,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 value={theme.primary_color}
                 onChange={(e) => {
                   onUpdateField('primary_color', e.target.value);
-                  onUpdateField('hover_color', e.target.value + 'cc');
+                  onUpdateField('hover_color', darkenHex(e.target.value, 0.2));
                 }}
                 className="w-9 h-7 border border-gray-300 rounded-lg cursor-pointer p-0.5"
               />

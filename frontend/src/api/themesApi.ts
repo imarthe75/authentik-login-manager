@@ -8,6 +8,25 @@ const getHeaders = () => ({
   'X-Admin-Key': ADMIN_KEY,
 });
 
+// Truncates 8-digit hex (#RRGGBBAA) to 6-digit (#RRGGBB) to satisfy backend validation
+const toHex6 = (v: unknown): unknown => {
+  if (typeof v === 'string' && /^#[0-9a-fA-F]{8}$/.test(v)) return v.slice(0, 7);
+  return v;
+};
+
+const COLOR_FIELDS = [
+  'primary_color', 'hover_color', 'card_bg_color', 'panel_bg_color',
+  'bg_flat_color', 'bg_gradient_from', 'bg_gradient_to',
+] as const;
+
+const sanitizeColors = (theme: Theme): Theme => {
+  const patched = { ...theme };
+  for (const field of COLOR_FIELDS) {
+    (patched as any)[field] = toHex6((patched as any)[field]);
+  }
+  return patched;
+};
+
 export const themesApi = {
   async getThemes(skip = 0, limit = 50): Promise<Theme[]> {
     const response = await fetch(`${API_BASE}/api/v1/themes?skip=${skip}&limit=${limit}`, {
@@ -31,7 +50,7 @@ export const themesApi = {
     const response = await fetch(`${API_BASE}/api/v1/themes`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify(theme),
+      body: JSON.stringify(sanitizeColors(theme)),
     });
     if (!response.ok) throw new Error(`Failed to save theme: ${response.statusText}`);
     return response.json();

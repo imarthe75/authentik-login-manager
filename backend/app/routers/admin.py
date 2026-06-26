@@ -553,6 +553,12 @@ _DEFAULT_THEME = SimpleNamespace(
     show_social_google=False,
     show_social_microsoft=False,
     show_social_gov_id=False,
+    show_forgot_password=True,
+    show_logos_panel=True,
+    show_password_toggle=True,
+    show_system_name=True,
+    show_system_subtitle=True,
+    show_field_labels=True,
     email_footer_text=None,
     email_template_type='integrated',
 )

@@ -194,14 +194,19 @@ export const App: React.FC = () => {
         </div>
 
         {/* Dropdown theme selection */}
-        {!loading && (
-          <ThemeSelector
-            themes={themesList}
-            currentSlug={theme.authentik_flow_slug}
-            onSelectSlug={handleSelectSlug}
-            onCreateTheme={handleCreateTheme}
-          />
-        )}
+        <div className="w-56">
+          {!loading ? (
+            <ThemeSelector
+              themes={themesList}
+              currentSlug={theme.authentik_flow_slug}
+              onSelectSlug={handleSelectSlug}
+              onCreateTheme={handleCreateTheme}
+            />
+          ) : (
+            /* Skeleton placeholder - reserva espacio durante carga */
+            <div className="h-10 bg-gray-300 rounded-lg animate-pulse" />
+          )}
+        </div>
       </header>
 
       {/* Main Two-Column Panel Container */}

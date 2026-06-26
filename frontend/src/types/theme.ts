@@ -58,6 +58,13 @@ export interface Theme {
   show_social_google: boolean;
   show_social_microsoft: boolean;
   show_social_gov_id: boolean;
+  show_forgot_password: boolean;
+  show_logos_panel: boolean;
+  show_password_toggle: boolean;
+  show_system_name: boolean;
+  show_system_subtitle: boolean;
+  show_field_labels: boolean;
+  show_app_message: boolean;
   email_footer_text: string | null;
   email_template_type: EmailTemplateType;
   email_bodies?: EmailBodies;

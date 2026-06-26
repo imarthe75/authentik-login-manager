@@ -10,6 +10,7 @@ export default defineConfig({
     allowedHosts: [
       'loginmanager.casmart.internal'
     ],
+    hmr: false,
     watch: {
       usePolling: true,
     },

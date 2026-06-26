@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Theme, EmailEventType, EmailBody, EMAIL_EVENT_TYPES, EMAIL_EVENT_LABELS, EMPTY_EMAIL_BODY } from '../../types/theme';
 import { themesApi } from '../../api/themesApi';
+import RichTextEditor from '../RichTextEditor';
 
 // ── Inline SVG icons for social providers ─────────────────────────────────
 
@@ -129,6 +130,51 @@ export const AccessAndNotificationsTab: React.FC<Props> = ({
   return (
     <div className="space-y-8">
 
+      {/* ── ELEMENTOS VISIBLES ──────────────────────────────────── */}
+      <section>
+        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+          Elementos visibles
+        </h3>
+        <div className="space-y-4">
+          <Toggle
+            label="Mostrar panel de logos"
+            description="Muestra u oculta el panel lateral de logotipos institucionales"
+            checked={theme.show_logos_panel}
+            onChange={v => onUpdateField('show_logos_panel', v)}
+          />
+          <Toggle
+            label="Mostrar nombre del sistema"
+            description="Muestra u oculta el título principal en el formulario"
+            checked={theme.show_system_name}
+            onChange={v => onUpdateField('show_system_name', v)}
+          />
+          <Toggle
+            label="Mostrar subtítulo"
+            description="Muestra u oculta el subtítulo debajo del nombre del sistema"
+            checked={theme.show_system_subtitle}
+            onChange={v => onUpdateField('show_system_subtitle', v)}
+          />
+          <Toggle
+            label="Mostrar ojo de contraseña"
+            description="Muestra u oculta el botón para ver/ocultar la contraseña"
+            checked={theme.show_password_toggle}
+            onChange={v => onUpdateField('show_password_toggle', v)}
+          />
+          <Toggle
+            label="Mostrar etiquetas de campos"
+            description="Muestra u oculta las etiquetas Usuario / Contraseña sobre los campos"
+            checked={theme.show_field_labels}
+            onChange={v => onUpdateField('show_field_labels', v)}
+          />
+          <Toggle
+            label="Mostrar mensaje de aplicación"
+            description="Muestra u oculta 'Inicia sesión para continuar a [Aplicación]' en el consent flow"
+            checked={theme.show_app_message}
+            onChange={v => onUpdateField('show_app_message', v)}
+          />
+        </div>
+      </section>
+
       {/* ── ACCESOS Y SEGURIDAD ──────────────────────────────────── */}
       <section>
         <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
@@ -136,6 +182,13 @@ export const AccessAndNotificationsTab: React.FC<Props> = ({
         </h3>
 
         <div className="space-y-4">
+          <Toggle
+            label="Mostrar recuperación de contraseña"
+            description="Muestra el enlace '¿Olvidaste tu contraseña?' en el portal"
+            checked={theme.show_forgot_password}
+            onChange={v => onUpdateField('show_forgot_password', v)}
+          />
+
           <Toggle
             label="Permitir auto-registro"
             description="Muestra el enlace '¿No tienes cuenta?' en el portal"
@@ -267,17 +320,14 @@ export const AccessAndNotificationsTab: React.FC<Props> = ({
 
           {/* Body HTML */}
           <div className="px-4 pt-3 pb-1">
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-semibold text-gray-700">Cuerpo del correo (HTML)</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-gray-700">Cuerpo del correo</label>
             </div>
-            <textarea
-              rows={8}
+            <RichTextEditor
               value={currentBody.body_html}
-              onChange={e => handleBodyChange('body_html', e.target.value)}
-              placeholder={`<p>Hola {{ user.username }},</p>\n<p>Contenido del correo para <em>${EMAIL_EVENT_LABELS[activeEvent]}</em>...</p>`}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono resize-y focus:outline-none focus:ring-2 focus:ring-blue-400"
-              style={{ minHeight: '160px' }}
-              spellCheck={false}
+              onChange={v => handleBodyChange('body_html', v)}
+              placeholder={`Hola {{ user.username }}, escribe aquí el contenido del correo para "${EMAIL_EVENT_LABELS[activeEvent]}"…`}
+              minHeight="180px"
             />
             {currentBody.body_html.length === 0 && (
               <p className="text-xs text-amber-600 mt-1">

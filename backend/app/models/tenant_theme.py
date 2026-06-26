@@ -113,6 +113,24 @@ class TenantTheme(Base):
     show_social_gov_id: Mapped[bool] = mapped_column(
         Boolean, server_default='false', nullable=False
     )
+    show_forgot_password: Mapped[bool] = mapped_column(
+        Boolean, server_default='true', nullable=False
+    )
+    show_logos_panel: Mapped[bool] = mapped_column(
+        Boolean, server_default='true', nullable=False
+    )
+    show_password_toggle: Mapped[bool] = mapped_column(
+        Boolean, server_default='true', nullable=False
+    )
+    show_system_name: Mapped[bool] = mapped_column(
+        Boolean, server_default='true', nullable=False
+    )
+    show_system_subtitle: Mapped[bool] = mapped_column(
+        Boolean, server_default='true', nullable=False
+    )
+    show_field_labels: Mapped[bool] = mapped_column(
+        Boolean, server_default='true', nullable=False
+    )
     email_footer_text: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )

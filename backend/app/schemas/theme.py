@@ -51,6 +51,12 @@ class ThemeBase(BaseModel):
     show_social_google: bool = False
     show_social_microsoft: bool = False
     show_social_gov_id: bool = False
+    show_forgot_password: bool = True
+    show_logos_panel: bool = True
+    show_password_toggle: bool = True
+    show_system_name: bool = True
+    show_system_subtitle: bool = True
+    show_field_labels: bool = True
     email_footer_text: Optional[str] = Field(None, max_length=255)
     email_template_type: EMAIL_TEMPLATE_TYPE = 'integrated'
 
@@ -118,6 +124,12 @@ class ThemeUpdate(BaseModel):
     show_social_google: Optional[bool] = None
     show_social_microsoft: Optional[bool] = None
     show_social_gov_id: Optional[bool] = None
+    show_forgot_password: Optional[bool] = None
+    show_logos_panel: Optional[bool] = None
+    show_password_toggle: Optional[bool] = None
+    show_system_name: Optional[bool] = None
+    show_system_subtitle: Optional[bool] = None
+    show_field_labels: Optional[bool] = None
     email_footer_text: Optional[str] = Field(None, max_length=255)
     email_template_type: Optional[EMAIL_TEMPLATE_TYPE] = None
 
@@ -187,6 +199,12 @@ class ThemePublic(BaseModel):
     show_social_google: bool = False
     show_social_microsoft: bool = False
     show_social_gov_id: bool = False
+    show_forgot_password: bool = True
+    show_logos_panel: bool = True
+    show_password_toggle: bool = True
+    show_system_name: bool = True
+    show_system_subtitle: bool = True
+    show_field_labels: bool = True
     is_custom: bool = True
 
     model_config = ConfigDict(from_attributes=True)

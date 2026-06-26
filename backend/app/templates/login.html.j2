@@ -370,7 +370,10 @@ var ECSS=[
 ".pf-c-form-control,input:not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]){border-radius:8px!important;border:1.5px solid rgba(0,0,0,0.15)!important;background:rgba(255,255,255,0.8)!important;box-shadow:none!important;max-width:100%!important}",
 ".pf-c-button.pf-m-primary,button[type=submit]{background-color:[[ theme.primary_color ]]!important;border-color:[[ theme.primary_color ]]!important;border-radius:8px!important;box-shadow:none!important;outline:none!important;width:100%!important}",
 ".pf-c-login__main-footer,[class*='main-footer']{padding:0!important;margin-top:0.5rem!important;background:transparent!important}",
-"a{color:[[ theme.primary_color ]]!important}"
+"a{color:[[ theme.primary_color ]]!important}",
+"[% if not theme.show_forgot_password %].pf-c-login__main-footer,[class*='main-footer']{display:none!important}[% endif %]",
+"[% if not theme.show_field_labels %].pf-c-form__label,.pf-c-form__label-text{display:none!important}[% endif %]",
+"[% if not theme.show_password_toggle %].pf-c-input-group>.pf-c-button,.pf-c-input-group .pf-c-button.pf-m-control,button[aria-label*='assword']{display:none!important}[% endif %]"
 ].join('');
 
 var TRANSLATIONS = {
@@ -494,8 +497,8 @@ new MutationObserver(function(ms){
 
     <!-- ── COLUMNA FORMULARIO ─────────────────────── -->
     <div id="cs-form-col">
-        <div id="cs-form-title">[[ theme.system_name ]]</div>
-        <div id="cs-form-subtitle">[[ theme.system_subtitle ]]</div>
+        <div id="cs-form-title" style="[% if not theme.show_system_name %]display:none;[% endif %]">[[ theme.system_name ]]</div>
+        <div id="cs-form-subtitle" style="[% if not theme.show_system_subtitle %]display:none;[% endif %]">[[ theme.system_subtitle ]]</div>
 
         <ak-skip-to-content></ak-skip-to-content>
         <ak-message-container></ak-message-container>
@@ -517,7 +520,7 @@ new MutationObserver(function(ms){
     </div>
 
     <!-- ── COLUMNA LOGOS ──────────────────────────── -->
-    <div id="cs-logos-col">
+    <div id="cs-logos-col" style="[% if not theme.show_logos_panel %]display:none;[% endif %]">
         <!-- Logo superior: imagen o texto -->
         <div id="cs-logo-top-wrap" style="[% if logo_top_url %]display:flex[% else %]display:none[% endif %]; align-items:center; justify-content:center;">
             <img id="cs-logo-top" class="cs-logo"
@@ -591,7 +594,7 @@ new MutationObserver(function(ms){
             bg.style.opacity = t.bg_opacity;
         }
 
-        /* logos panel background and height */
+        /* logos panel background, height and visibility */
         const logosCol = document.getElementById('cs-logos-col');
         if (logosCol) {
             const rgb = cssRgb(t.panel_bg_color);
@@ -599,6 +602,7 @@ new MutationObserver(function(ms){
             logosCol.style.height = '';
             logosCol.style.maxHeight = '';
             logosCol.style.alignSelf = '';
+            logosCol.style.display = t.show_logos_panel !== false ? '' : 'none';
         }
 
         /* form col background and height */
@@ -668,12 +672,16 @@ new MutationObserver(function(ms){
 
         /* alineaciones en tarjeta form */
         const fTitle = document.getElementById('cs-form-title');
-        if (fTitle) { fTitle.innerHTML = t.system_name; fTitle.style.textAlign = t.name_align; }
+        if (fTitle) { fTitle.innerHTML = t.system_name; fTitle.style.textAlign = t.name_align; fTitle.style.display = t.show_system_name !== false ? 'block' : 'none'; }
         const fSub = document.getElementById('cs-form-subtitle');
-        if (fSub) { fSub.innerHTML = t.system_subtitle; fSub.style.textAlign = t.subtitle_align; }
+        if (fSub) { fSub.innerHTML = t.system_subtitle; fSub.style.textAlign = t.subtitle_align; fSub.style.display = t.show_system_subtitle !== false ? 'block' : 'none'; }
 
         /* inyección en shadow DOM: MutationObserver para máxima fiabilidad */
-        csInjectShadow(t.primary_color, t.hover_color);
+        csInjectShadow(t.primary_color, t.hover_color, {
+            showForgot: t.show_forgot_password !== false,
+            showPasswordToggle: t.show_password_toggle !== false,
+            showFieldLabels: t.show_field_labels !== false
+        });
     }
 
     /* fetch per-app theme */
@@ -707,7 +715,11 @@ new MutationObserver(function(ms){
 
     /* modal PDF */
     /* ── shadow DOM injection — sin loop infinito ───── */
-    function csInjectShadow(primary, hover) {
+    function csInjectShadow(primary, hover, opts) {
+        if (!opts || typeof opts !== 'object') opts = {};
+        const showForgot = opts.showForgot !== false;
+        const showPasswordToggle = opts.showPasswordToggle !== false;
+        const showFieldLabels = opts.showFieldLabels !== false;
         const CSS = `
             /* ── Anular CSS Custom Props en :host para cascada completa ── */
             :host {
@@ -859,8 +871,9 @@ new MutationObserver(function(ms){
                 box-shadow: 0 0 0 3px ${primary}33 !important;
                 outline: none !important;
             }
-            /* ── Footer "¿Olvidaste tu contraseña?" (MANTENER visible) ── */
+            /* ── Footer "¿Olvidaste tu contraseña?" ── */
             .pf-c-login__main-footer, [class*="main-footer"] {
+                ${showForgot ? '' : 'display: none !important;'}
                 padding: 0 !important;
                 margin-top: 0.75rem !important;
                 background: transparent !important;
@@ -888,6 +901,17 @@ new MutationObserver(function(ms){
             }
             a { color: ${primary} !important; }
             .pf-c-form__label-text { color: rgba(0,0,0,0.7) !important; font-size: 0.85rem !important; }
+            /* ── Toggle visibilidad de contraseña ── */
+            .pf-c-input-group > button,
+            .pf-c-input-group .pf-c-button.pf-m-control,
+            button[aria-label*="assword"] {
+                ${showPasswordToggle ? '' : 'display: none !important;'}
+            }
+            /* ── Etiquetas de campo ── */
+            .pf-c-form__label,
+            label.pf-c-form__label {
+                ${showFieldLabels ? '' : 'display: none !important;'}
+            }
         `;
         // processRoot inyecta/actualiza el CSS en cada shadow root recursivamente
         // _done previene loops infinitos dentro de una misma llamada a csInjectShadow
@@ -959,7 +983,11 @@ new MutationObserver(function(ms){
     // ── INYECCIÓN INMEDIATA (Firefox/Edge) ──────────────────────────────────
     // Se ejecuta SIN esperar al API fetch — usa colores del tema global (Jinja2)
     // Cuando applyTheme() reciba los colores reales, processRoot actualizará el CSS
-    csInjectShadow('[[ theme.primary_color ]]', '[[ theme.hover_color ]]');
+    csInjectShadow('[[ theme.primary_color ]]', '[[ theme.hover_color ]]', {
+        showForgot: [[ theme.show_forgot_password | lower ]],
+        showPasswordToggle: [[ theme.show_password_toggle | lower ]],
+        showFieldLabels: [[ theme.show_field_labels | lower ]]
+    });
 
     window.csPdfOpen = function() {
         const m = document.getElementById('cs-pdf-modal');
