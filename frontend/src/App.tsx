@@ -37,21 +37,27 @@ export const App: React.FC = () => {
     }
   };
 
-  const fetchThemes = async () => {
+  const fetchThemes = async (preserveFlowSlug?: string, preserveAppSlug?: string | null) => {
     try {
       setLoading(true);
       const data = await themesApi.getThemes();
       setThemesList(data);
       
-      // If list is not empty and theme is default, load the first one
       if (data.length > 0) {
-        const found = data.find(t => t.authentik_flow_slug === currentSlug);
+        let found = null;
+        if (preserveFlowSlug !== undefined) {
+          found = data.find(t => t.authentik_flow_slug === preserveFlowSlug && t.authentik_app_slug === preserveAppSlug);
+        } else {
+          // Initial load: find general template (default-authentication-flow with app_slug null)
+          found = data.find(t => t.authentik_flow_slug === 'default-authentication-flow' && !t.authentik_app_slug);
+        }
+
         if (found) {
           setTheme(found);
           setIsDirty(false);
         } else {
-          // Load first in list
-          loadTheme(data[0].authentik_flow_slug);
+          // Fallback: load theme
+          loadTheme(preserveFlowSlug || 'default-authentication-flow', preserveAppSlug);
         }
       } else {
         // Safe fallback if DB is completely empty (initialize with seed)
@@ -90,9 +96,17 @@ export const App: React.FC = () => {
           show_social_google: false,
           show_social_microsoft: false,
           show_social_gov_id: false,
+          show_forgot_password: true,
+          show_logos_panel: true,
+          show_password_toggle: true,
+          show_system_name: true,
+          show_system_subtitle: true,
+          show_field_labels: true,
+          show_app_message: false,
           email_footer_text: null,
           email_template_type: 'integrated',
           email_bodies: {},
+          custom_messages: {},
         };
         setThemesList([seedTheme]);
         setTheme(seedTheme);
@@ -162,9 +176,17 @@ export const App: React.FC = () => {
       show_social_google: false,
       show_social_microsoft: false,
       show_social_gov_id: false,
+      show_forgot_password: true,
+      show_logos_panel: true,
+      show_password_toggle: true,
+      show_system_name: true,
+      show_system_subtitle: true,
+      show_field_labels: true,
+      show_app_message: false,
       email_footer_text: null,
       email_template_type: 'integrated',
       email_bodies: {},
+      custom_messages: {},
     };
     
     // Add to dropdown list and set as current
@@ -174,9 +196,11 @@ export const App: React.FC = () => {
   };
 
   const handleSave = async () => {
+    const activeFlowSlug = theme.authentik_flow_slug;
+    const activeAppSlug = theme.authentik_app_slug;
     await saveTheme();
-    // Re-fetch list to capture updated changes or creation
-    fetchThemes();
+    // Re-fetch list to capture updated changes or creation, preserving the active theme
+    await fetchThemes(activeFlowSlug, activeAppSlug);
   };
 
   return (

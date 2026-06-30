@@ -43,6 +43,7 @@ services:
       - /app/node_modules
     networks:
       - aura-network
+      - identity-network
     restart: always
 
 networks:

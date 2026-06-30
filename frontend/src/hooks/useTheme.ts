@@ -44,9 +44,11 @@ const DEFAULT_THEME_STATE: Theme = {
   show_system_name: true,
   show_system_subtitle: true,
   show_field_labels: true,
+  show_app_message: false,
   email_footer_text: null,
   email_template_type: 'integrated',
   email_bodies: {},
+  custom_messages: {},
 };
 
 export const useTheme = () => {

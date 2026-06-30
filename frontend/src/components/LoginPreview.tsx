@@ -146,7 +146,7 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme, emailPreviewR
           type="button"
           onClick={() => setView('email')}
           className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-            view === 'email'
+            (view as string) === 'email'
               ? 'border-white/70 bg-white/30 text-white backdrop-blur'
               : 'border-white/40 bg-white/10 text-white/70 hover:bg-white/20'
           }`}
@@ -224,7 +224,7 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme, emailPreviewR
 
             {theme.show_forgot_password && (
               <div className="text-center text-xs text-gray-600 font-sans cursor-not-allowed mb-4 hover:underline">
-                ¿Olvidaste tu contraseña?
+                {theme.custom_messages?.["forgot your username or password?"] || '¿Olvidaste tu contraseña?'}
               </div>
             )}
 

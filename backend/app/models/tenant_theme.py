@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Float, Integer, Boolean, DateTime, Text, func
+from sqlalchemy import String, Float, Integer, Boolean, DateTime, Text, func, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
@@ -131,11 +131,17 @@ class TenantTheme(Base):
     show_field_labels: Mapped[bool] = mapped_column(
         Boolean, server_default='true', nullable=False
     )
+    show_app_message: Mapped[bool] = mapped_column(
+        Boolean, server_default='false', nullable=False
+    )
     email_footer_text: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )
     email_template_type: Mapped[str] = mapped_column(
         String(20), server_default='integrated', nullable=False
+    )
+    custom_messages: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, server_default='{}'
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False

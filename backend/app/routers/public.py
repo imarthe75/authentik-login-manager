@@ -125,6 +125,16 @@ async def get_public_theme(
         if db_theme:
             logger.info(f"Found global flow theme for flow_slug='{flow_slug}' (ID: {db_theme.id})")
 
+    # Fallback to default-authentication-flow global theme if no theme exists for this flow
+    if not db_theme and flow_slug != "default-authentication-flow":
+        logger.info(f"Querying DB for fallback global theme 'default-authentication-flow' because no theme was found for '{flow_slug}'")
+        stmt = select(TenantTheme).where(
+            TenantTheme.authentik_flow_slug == "default-authentication-flow",
+            TenantTheme.authentik_app_slug.is_(None)
+        )
+        result = await db.execute(stmt)
+        db_theme = result.scalar_one_or_none()
+
     if db_theme:
         theme_dict = {
             "display_name": db_theme.display_name,
@@ -165,6 +175,7 @@ async def get_public_theme(
             "show_system_subtitle": db_theme.show_system_subtitle,
             "show_field_labels": db_theme.show_field_labels,
             "is_custom": True,  # theme exists in DB
+            "custom_messages": db_theme.custom_messages or {},
         }
     else:
         logger.warning(f"No custom theme found for app='{app}' or flow_slug='{flow_slug}'. Using default theme.")
@@ -213,8 +224,17 @@ async def get_theme_image(
         result = await db.execute(stmt)
         db_theme = result.scalar_one_or_none()
 
+    if not db_theme and flow_slug != "default-authentication-flow":
+        logger.info(f"Querying DB for fallback global theme image from 'default-authentication-flow' because no theme was found for '{flow_slug}'")
+        stmt = select(TenantTheme).where(
+            TenantTheme.authentik_flow_slug == "default-authentication-flow",
+            TenantTheme.authentik_app_slug.is_(None)
+        )
+        result = await db.execute(stmt)
+        db_theme = result.scalar_one_or_none()
+
     if not db_theme:
-        logger.warning(f"No custom theme found for flow_slug='{flow_slug}' or app='{app}'. Cannot serve image.")
+        logger.warning(f"No custom theme found for flow_slug='{flow_slug}' or app='{app}' (even with fallback). Cannot serve image.")
         raise HTTPException(status_code=404, detail="Theme or flow slug not found.")
 
     base64_str = getattr(db_theme, f"{field}_base64", None)

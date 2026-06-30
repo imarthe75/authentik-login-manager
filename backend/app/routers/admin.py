@@ -559,8 +559,10 @@ _DEFAULT_THEME = SimpleNamespace(
     show_system_name=True,
     show_system_subtitle=True,
     show_field_labels=True,
+    show_app_message=False,
     email_footer_text=None,
     email_template_type='integrated',
+    custom_messages={},
 )
 
 
@@ -614,12 +616,16 @@ def _render_theme(env: Environment, theme) -> str:
     api_base  = '/lm'
 
     template = env.get_template("login.html.j2")
+    import json
+    custom_messages = getattr(theme, 'custom_messages', None) or {}
+    custom_messages_json = json.dumps(custom_messages)
     return template.render(
         theme=theme,
         api_base=api_base,
         logo_top_url=f'{api_base}/api/v1/public/theme/{flow_slug}/image/logo_top{app_qs}' if getattr(theme, 'logo_top_base64', None) else '',
         logo_bottom_url=f'{api_base}/api/v1/public/theme/{flow_slug}/image/logo_bottom{app_qs}' if getattr(theme, 'logo_bottom_base64', None) else '',
         bg_image_url=f'{api_base}/api/v1/public/theme/{flow_slug}/image/bg_image{app_qs}' if getattr(theme, 'bg_image_base64', None) else '',
+        custom_messages_json=custom_messages_json,
     )
 
 

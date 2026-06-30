@@ -68,6 +68,7 @@ export interface Theme {
   email_footer_text: string | null;
   email_template_type: EmailTemplateType;
   email_bodies?: EmailBodies;
+  custom_messages?: Record<string, string> | null;
   created_at?: string;
   updated_at?: string;
 }

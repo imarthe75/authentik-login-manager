@@ -57,8 +57,10 @@ class ThemeBase(BaseModel):
     show_system_name: bool = True
     show_system_subtitle: bool = True
     show_field_labels: bool = True
+    show_app_message: bool = False
     email_footer_text: Optional[str] = Field(None, max_length=255)
     email_template_type: EMAIL_TEMPLATE_TYPE = 'integrated'
+    custom_messages: Optional[Dict[str, str]] = Field(default_factory=dict)
 
     @field_validator("system_name", mode="after")
     @classmethod
@@ -130,8 +132,10 @@ class ThemeUpdate(BaseModel):
     show_system_name: Optional[bool] = None
     show_system_subtitle: Optional[bool] = None
     show_field_labels: Optional[bool] = None
+    show_app_message: Optional[bool] = None
     email_footer_text: Optional[str] = Field(None, max_length=255)
     email_template_type: Optional[EMAIL_TEMPLATE_TYPE] = None
+    custom_messages: Optional[Dict[str, str]] = None
 
     @field_validator("email_footer_text", mode="before")
     @classmethod
@@ -205,6 +209,8 @@ class ThemePublic(BaseModel):
     show_system_name: bool = True
     show_system_subtitle: bool = True
     show_field_labels: bool = True
+    show_app_message: bool = False
     is_custom: bool = True
+    custom_messages: Optional[Dict[str, str]] = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)

@@ -55,6 +55,31 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   const bgImgRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
 
+  const [newKey, setNewKey] = React.useState('');
+  const [newVal, setNewVal] = React.useState('');
+
+  const customMsgs = theme.custom_messages || {};
+
+  const handleUpdateMessage = (original: string, translation: string) => {
+    const updated = { ...customMsgs, [original]: translation };
+    onUpdateField('custom_messages', updated);
+  };
+
+  const handleRemoveMessage = (original: string) => {
+    const updated = { ...customMsgs };
+    delete updated[original];
+    onUpdateField('custom_messages', updated);
+  };
+
+  const handleAddMessage = () => {
+    if (!newKey.trim()) return;
+    // Lowercase key since shadow-intercept search is lowercased
+    const formattedKey = newKey.trim().toLowerCase().replace(/\s+/g, ' ');
+    handleUpdateMessage(formattedKey, newVal.trim());
+    setNewKey('');
+    setNewVal('');
+  };
+
   const isBusy = savePhase === 'saving' || savePhase === 'deploying';
 
   const handleFileChange = (
@@ -781,6 +806,121 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
             onUpdateField={onUpdateField}
             onUpdateEmailBody={onUpdateEmailBody}
           />
+        </div>
+
+        {/* 9. CUSTOM MESSAGES / TRANSLATIONS */}
+        <div className="border-b border-gray-200 pb-5 space-y-4">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase font-sans">
+            🗣 Mensajes y Traducciones
+          </h3>
+          <p className="text-[10px] text-gray-400 font-sans leading-relaxed text-left">
+            Personaliza o traduce cualquier texto en la interfaz de Authentik. Ingresa la frase original en inglés y tu texto personalizado en español.
+          </p>
+
+          {/* Predefined helpers */}
+          <div className="bg-white border border-gray-200 rounded-xl p-3.5 space-y-3 shadow-sm text-left">
+            <span className="text-[10px] font-bold text-[#4272A5] uppercase font-sans">Mensajes comunes</span>
+            
+            <div className="space-y-3.5">
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 font-sans">
+                  "Forgot your username or password?"
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. ¿Olvidaste tu nombre de usuario o contraseña?"
+                  value={customMsgs["forgot your username or password?"] || ''}
+                  onChange={(e) => handleUpdateMessage("forgot your username or password?", e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs bg-[#fcfbf9] focus:outline-none focus:border-[#4272A5] font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 font-sans">
+                  "Enter the email address or username associated with your account."
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Introduzca la dirección de correo electrónico o nombre de usuario asociado con su cuenta."
+                  value={customMsgs["enter the email address or username associated with your account."] || ''}
+                  onChange={(e) => handleUpdateMessage("enter the email address or username associated with your account.", e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs bg-[#fcfbf9] focus:outline-none focus:border-[#4272A5] font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 font-sans">
+                  "Enter your username or email address."
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Introduzca su nombre de usuario o correo electrónico."
+                  value={customMsgs["enter your username or email address."] || ''}
+                  onChange={(e) => handleUpdateMessage("enter your username or email address.", e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs bg-[#fcfbf9] focus:outline-none focus:border-[#4272A5] font-sans"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Arbitrary list editor */}
+          <div className="bg-white border border-gray-200 rounded-xl p-3.5 space-y-3.5 shadow-sm text-left">
+            <span className="text-[10px] font-bold text-[#4272A5] uppercase font-sans">Otras traducciones/mensajes</span>
+            
+            {/* List existing non-predefined custom messages */}
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              {Object.keys(customMsgs).filter(k => ![
+                "forgot your username or password?",
+                "enter the email address or username associated with your account.",
+                "enter your username or email address."
+              ].includes(k)).map((original) => (
+                <div key={original} className="border border-gray-150 rounded-lg p-2 bg-gray-50/50 flex flex-col gap-1.5 relative">
+                  <div className="flex justify-between items-start">
+                    <span className="text-[9px] font-bold text-gray-400 break-all select-all">Original: "{original}"</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMessage(original)}
+                      className="text-red-500 hover:text-red-700 text-xxs font-bold cursor-pointer"
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={customMsgs[original]}
+                    onChange={(e) => handleUpdateMessage(original, e.target.value)}
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-xxs focus:outline-none focus:border-[#4272A5] font-sans"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Add new entry form */}
+            <div className="border-t border-dashed border-gray-200 pt-3 space-y-2">
+              <label className="block text-[10px] font-bold text-gray-500 font-sans">Agregar frase personalizada</label>
+              <input
+                type="text"
+                placeholder="Frase original en inglés (ej: Username)"
+                value={newKey}
+                onChange={(e) => setNewKey(e.target.value)}
+                className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs bg-[#fcfbf9] focus:outline-none focus:border-[#4272A5] font-sans"
+              />
+              <input
+                type="text"
+                placeholder="Traducción en español (ej: Nombre de usuario)"
+                value={newVal}
+                onChange={(e) => setNewVal(e.target.value)}
+                className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs bg-[#fcfbf9] focus:outline-none focus:border-[#4272A5] font-sans"
+              />
+              <button
+                type="button"
+                onClick={handleAddMessage}
+                className="w-full py-1.5 bg-[#4272A5] hover:bg-[#2d5580] text-white text-[10px] font-bold rounded-lg cursor-pointer transition-colors"
+              >
+                + Agregar traducción
+              </button>
+            </div>
+          </div>
         </div>
 
       </div>
