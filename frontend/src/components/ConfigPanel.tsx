@@ -10,9 +10,10 @@ const darkenHex = (hex: string, amount = 0.2): string => {
   return '#' + [r, g, b].map(n => n.toString(16).padStart(2, '0')).join('');
 };
 import { Upload, RotateCcw, Save, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
-import { Theme, EmailBody } from '../types/theme';
+import { Theme } from '../types/theme';
 import { SavePhase } from '../hooks/useTheme';
 import { AccessAndNotificationsTab } from './tabs/AccessAndNotificationsTab';
+import { TenantSelector } from './TenantSelector';
 
 interface ConfigPanelProps {
   theme: Theme;
@@ -25,7 +26,8 @@ interface ConfigPanelProps {
   onRetryDeploy: () => void;
   authentikApps: { slug: string; name: string }[];
   onChangeApp: (appSlug: string | null) => void;
-  onUpdateEmailBody: (eventType: string, body: EmailBody) => void;
+  selectedTenantId: string | null;
+  onSelectTenant: (tenantId: string, tenantName: string) => void;
 }
 
 const PREDEFINED_COLORS = [
@@ -48,7 +50,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   onRetryDeploy,
   authentikApps,
   onChangeApp,
-  onUpdateEmailBody,
+  selectedTenantId,
+  onSelectTenant,
 }) => {
   const logoTopRef = useRef<HTMLInputElement>(null);
   const logoBottomRef = useRef<HTMLInputElement>(null);
@@ -200,32 +203,48 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
       {/* Settings Sections */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-6">
 
-        {/* 0. APPLICATION MAPPING */}
+        {/* 0. TENANT SELECTOR — siempre hasta arriba: define sobre qué proyecto se trabaja */}
         <div className="border-b border-gray-200 pb-5">
-          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase mb-3 font-sans">
-            📱 Aplicación de Destino
-          </h3>
-          <label className="block text-[11px] font-semibold text-gray-600 mb-2 font-sans leading-relaxed">
-            Asocia este diseño de login a una aplicación de Authentik
-          </label>
-          <select
-            value={theme.authentik_app_slug || ''}
-            onChange={(e) => onChangeApp(e.target.value || null)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:outline-none focus:border-[#4272A5] font-sans text-gray-700 shadow-sm"
-          >
-            <option value="">-- Sin vinculación (Diseño Global / Por Defecto) --</option>
-            {authentikApps.map((app) => (
-              <option key={app.slug} value={app.slug}>
-                {app.name} ({app.slug})
-              </option>
-            ))}
-          </select>
-          <p className="text-[10px] text-gray-400 mt-2 font-sans leading-relaxed">
-            Al seleccionar una aplicación, este diseño visual se inyectará de forma aislada e independiente solo cuando los usuarios ingresen a ella.
-          </p>
+          <TenantSelector
+            selectedTenantId={selectedTenantId}
+            onSelectTenant={onSelectTenant}
+          />
         </div>
 
-        {/* 1. LAYOUT POSITION */}
+        {/* 1. APPLICATION MAPPING — justo después del tenant, solo disponible si hay tenant */}
+        {selectedTenantId ? (
+          <div className="border-b border-gray-200 pb-5">
+            <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase mb-3 font-sans">
+              📱 Aplicación de Destino
+            </h3>
+            <label className="block text-[11px] font-semibold text-gray-600 mb-2 font-sans leading-relaxed">
+              Asocia este diseño de login a una aplicación de Authentik
+            </label>
+            <select
+              value={theme.authentik_app_slug || ''}
+              onChange={(e) => onChangeApp(e.target.value || null)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:outline-none focus:border-[#4272A5] font-sans text-gray-700 shadow-sm"
+            >
+              <option value="">-- Sin vinculación (Diseño Global / Por Defecto) --</option>
+              {authentikApps.map((app) => (
+                <option key={app.slug} value={app.slug}>
+                  {app.name} ({app.slug})
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-gray-400 mt-2 font-sans leading-relaxed">
+              Al seleccionar una aplicación, este diseño visual se inyectará de forma aislada e independiente solo cuando los usuarios ingresen a ella.
+            </p>
+          </div>
+        ) : (
+          <div className="border-b border-gray-200 pb-5 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <p className="text-[10px] text-gray-500 font-sans">
+              💡 Selecciona un tenant primero para configurar aplicaciones de destino.
+            </p>
+          </div>
+        )}
+
+        {/* 2. LAYOUT POSITION */}
         <div className="border-b border-gray-200 pb-5">
           <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase mb-3.5 font-sans">
             📐 Distribución del layout
@@ -804,7 +823,6 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
           <AccessAndNotificationsTab
             theme={theme}
             onUpdateField={onUpdateField}
-            onUpdateEmailBody={onUpdateEmailBody}
           />
         </div>
 

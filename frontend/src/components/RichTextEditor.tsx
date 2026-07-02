@@ -7,12 +7,167 @@ import { Color } from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
+import { Extension } from '@tiptap/core';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight,
   List, ListOrdered, Link2, Link2Off,
   Type, Code2, Heading1, Heading2, Minus,
+  RotateCcw, Highlighter, Quote, Code, Subscript, Superscript,
 } from 'lucide-react';
+
+// Custom extensions for font-family and font-size
+const FontFamily = Extension.create({
+  name: 'fontFamily',
+  addOptions() { return { types: ['textStyle'] }; },
+  addGlobalAttributes() {
+    return [
+      {
+        types: this.options.types,
+        attributes: {
+          fontFamily: {
+            default: null,
+            parseHTML: (element) => element.style.fontFamily || null,
+            renderHTML: (attributes) => {
+              if (!attributes.fontFamily) return {};
+              return { style: `font-family: ${attributes.fontFamily}` };
+            },
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      setFontFamily: (fontFamily: string) => ({ commands }) => {
+        return commands.setMark('textStyle', { fontFamily });
+      },
+      unsetFontFamily: () => ({ commands }) => {
+        return commands.resetAttributes('textStyle', 'fontFamily');
+      },
+    } as any;
+  },
+});
+
+const FontSize = Extension.create({
+  name: 'fontSize',
+  addOptions() { return { types: ['textStyle'] }; },
+  addGlobalAttributes() {
+    return [
+      {
+        types: this.options.types,
+        attributes: {
+          fontSize: {
+            default: null,
+            parseHTML: (element) => element.style.fontSize || null,
+            renderHTML: (attributes) => {
+              if (!attributes.fontSize) return {};
+              return { style: `font-size: ${attributes.fontSize}` };
+            },
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      setFontSize: (fontSize: string) => ({ commands }) => {
+        return commands.setMark('textStyle', { fontSize });
+      },
+      unsetFontSize: () => ({ commands }) => {
+        return commands.resetAttributes('textStyle', 'fontSize');
+      },
+    } as any;
+  },
+});
+
+const Highlight = Extension.create({
+  name: 'highlight',
+  addOptions() { return { types: ['textStyle'] }; },
+  addGlobalAttributes() {
+    return [
+      {
+        types: this.options.types,
+        attributes: {
+          highlight: {
+            default: null,
+            parseHTML: (element) => element.style.backgroundColor || null,
+            renderHTML: (attributes) => {
+              if (!attributes.highlight) return {};
+              return { style: `background-color: ${attributes.highlight}` };
+            },
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      setHighlight: (color: string) => ({ commands }) => {
+        return commands.setMark('textStyle', { highlight: color });
+      },
+      unsetHighlight: () => ({ commands }) => {
+        return commands.resetAttributes('textStyle', 'highlight');
+      },
+    } as any;
+  },
+});
+
+const SuperscriptExtension = Extension.create({
+  name: 'superscript',
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['textStyle'],
+        attributes: {
+          superscript: {
+            default: false,
+            parseHTML: (element) => element.style.verticalAlign === 'super',
+            renderHTML: (attributes) => {
+              if (!attributes.superscript) return {};
+              return { style: 'vertical-align: super; font-size: 0.8em' };
+            },
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      toggleSuperscript: () => ({ commands }) => {
+        return commands.toggleMark('textStyle', { superscript: true });
+      },
+    } as any;
+  },
+});
+
+const SubscriptExtension = Extension.create({
+  name: 'subscript',
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['textStyle'],
+        attributes: {
+          subscript: {
+            default: false,
+            parseHTML: (element) => element.style.verticalAlign === 'sub',
+            renderHTML: (attributes) => {
+              if (!attributes.subscript) return {};
+              return { style: 'vertical-align: sub; font-size: 0.8em' };
+            },
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      toggleSubscript: () => ({ commands }) => {
+        return commands.toggleMark('textStyle', { subscript: true });
+      },
+    } as any;
+  },
+});
 
 interface Props {
   value: string;
@@ -62,6 +217,11 @@ const RichTextEditor: React.FC<Props> = ({
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       TextStyle,
       Color,
+      FontFamily,
+      FontSize,
+      Highlight,
+      SuperscriptExtension,
+      SubscriptExtension,
       Link.configure({ openOnClick: false }),
       Placeholder.configure({ placeholder }),
     ],
@@ -78,11 +238,12 @@ const RichTextEditor: React.FC<Props> = ({
     if (value !== lastValueRef.current) {
       lastValueRef.current = value;
       setHtmlDraft(value);
-      if (editor && mode === 'visual') {
-        editor.commands.setContent(value, { emitUpdate: false });
+      if (editor) {
+        // Siempre actualizar el editor, sin importar el modo
+        editor.commands.setContent(value || '', { emitUpdate: false });
       }
     }
-  }, [value, editor, mode]);
+  }, [value, editor]);
 
   const switchToHtml = useCallback(() => {
     if (editor) setHtmlDraft(editor.getHTML());
@@ -101,6 +262,33 @@ const RichTextEditor: React.FC<Props> = ({
   const handleHtmlChange = (v: string) => {
     setHtmlDraft(v);
     onChange(v);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const variable = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('application/x-email-variable');
+    if (variable && editor && mode === 'visual') {
+      editor.chain().focus().insertContent(variable).run();
+    } else if (variable && mode === 'html') {
+      const textarea = e.currentTarget.querySelector('textarea') as HTMLTextAreaElement;
+      if (textarea) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const newHtml = htmlDraft.substring(0, start) + variable + htmlDraft.substring(end);
+        handleHtmlChange(newHtml);
+        setTimeout(() => {
+          textarea.selectionStart = textarea.selectionEnd = start + variable.length;
+          textarea.focus();
+        }, 0);
+      }
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
   };
 
   const setLink = useCallback(() => {
@@ -147,6 +335,56 @@ const RichTextEditor: React.FC<Props> = ({
 
         {mode === 'visual' && editor && (
           <>
+            <Sep />
+
+            {/* Font family selector */}
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  (editor.chain().focus() as any).setFontFamily(e.target.value).run();
+                } else {
+                  (editor.chain().focus() as any).unsetFontFamily().run();
+                }
+                e.target.value = '';
+              }}
+              className="px-2 py-1 text-xs border border-gray-300 rounded hover:border-gray-400 transition-colors cursor-pointer"
+              title="Tipo de fuente"
+            >
+              <option value="">Fuente</option>
+              <option value="Arial, sans-serif">Arial</option>
+              <option value="'Courier New', monospace">Courier</option>
+              <option value="Georgia, serif">Georgia</option>
+              <option value="Verdana, sans-serif">Verdana</option>
+              <option value="'Times New Roman', serif">Times</option>
+              <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
+            </select>
+
+            {/* Font size selector */}
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  (editor.chain().focus() as any).setFontSize(e.target.value).run();
+                } else {
+                  (editor.chain().focus() as any).unsetFontSize().run();
+                }
+                e.target.value = '';
+              }}
+              className="px-2 py-1 text-xs border border-gray-300 rounded hover:border-gray-400 transition-colors cursor-pointer"
+              title="Tamaño de fuente"
+            >
+              <option value="">Tamaño</option>
+              <option value="12px">12px</option>
+              <option value="14px">14px</option>
+              <option value="16px">16px</option>
+              <option value="18px">18px</option>
+              <option value="20px">20px</option>
+              <option value="24px">24px</option>
+              <option value="28px">28px</option>
+              <option value="32px">32px</option>
+            </select>
+
             <Sep />
 
             {/* Text style */}
@@ -213,6 +451,16 @@ const RichTextEditor: React.FC<Props> = ({
 
             <Sep />
 
+            {/* Blockquote & Code */}
+            <Btn title="Cita (Blockquote)" active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
+              <Quote className="w-3.5 h-3.5" />
+            </Btn>
+            <Btn title="Código" active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()}>
+              <Code className="w-3.5 h-3.5" />
+            </Btn>
+
+            <Sep />
+
             {/* Divider / rule */}
             <Btn title="Línea horizontal" onClick={() => editor.chain().focus().setHorizontalRule().run()}>
               <Minus className="w-3.5 h-3.5" />
@@ -220,7 +468,17 @@ const RichTextEditor: React.FC<Props> = ({
 
             <Sep />
 
-            {/* Text color */}
+            {/* Superscript & Subscript */}
+            <Btn title="Superíndice" active={editor.isActive('textStyle', { superscript: true })} onClick={() => (editor.chain().focus() as any).toggleSuperscript().run()}>
+              <Superscript className="w-3.5 h-3.5" />
+            </Btn>
+            <Btn title="Subíndice" active={editor.isActive('textStyle', { subscript: true })} onClick={() => (editor.chain().focus() as any).toggleSubscript().run()}>
+              <Subscript className="w-3.5 h-3.5" />
+            </Btn>
+
+            <Sep />
+
+            {/* Text color & Highlight */}
             <div className="flex items-center gap-1 pl-0.5" title="Color del texto">
               <span className="text-xs text-gray-500 font-bold">A</span>
               <input
@@ -231,6 +489,24 @@ const RichTextEditor: React.FC<Props> = ({
                 title="Color del texto"
               />
             </div>
+
+            <div className="flex items-center gap-1 pl-0.5" title="Color de fondo (Highlight)">
+              <Highlighter className="w-3.5 h-3.5 text-gray-500" />
+              <input
+                type="color"
+                defaultValue="#FFFF00"
+                onChange={e => (editor.chain().focus() as any).setHighlight(e.target.value).run()}
+                className="w-5 h-5 rounded cursor-pointer border border-gray-300 p-0"
+                title="Fondo"
+              />
+            </div>
+
+            <Sep />
+
+            {/* Clear formatting */}
+            <Btn title="Limpiar formato" onClick={() => editor.chain().focus().clearNodes().run()}>
+              <RotateCcw className="w-3.5 h-3.5" />
+            </Btn>
           </>
         )}
 
@@ -249,14 +525,16 @@ const RichTextEditor: React.FC<Props> = ({
       {/* ── Editor area ──────────────────────────────────────────────────── */}
       {mode === 'visual' ? (
         <div
-          className="px-3 py-2 text-sm"
+          className="px-3 py-2 text-sm transition-colors hover:bg-gray-50"
           style={{ minHeight, maxHeight: '340px', overflowY: 'auto' }}
           onClick={() => editor?.commands.focus()}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
         >
           <EditorContent editor={editor} className="outline-none" />
         </div>
       ) : (
-        <div className="relative bg-gray-950">
+        <div className="relative bg-gray-950" onDrop={handleDrop} onDragOver={handleDragOver}>
           <textarea
             value={htmlDraft}
             onChange={e => handleHtmlChange(e.target.value)}

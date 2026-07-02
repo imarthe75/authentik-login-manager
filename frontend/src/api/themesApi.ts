@@ -3,10 +3,22 @@ import { Theme, EmailBodies } from '../types/theme';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 const ADMIN_KEY = import.meta.env.VITE_ADMIN_KEY || '';
 
-const getHeaders = () => ({
-  'Content-Type': 'application/json',
-  'X-Admin-Key': ADMIN_KEY,
-});
+const getHeaders = (hostname?: string) => {
+  const headers: any = {
+    'Content-Type': 'application/json',
+    'X-Admin-Key': ADMIN_KEY,
+  };
+
+  // Agregar X-Tenant-Domain si se proporciona hostname
+  if (hostname) {
+    headers['X-Tenant-Domain'] = hostname;
+  } else {
+    // Si no se proporciona, usar el hostname actual
+    headers['X-Tenant-Domain'] = window.location.hostname;
+  }
+
+  return headers;
+};
 
 // Truncates 8-digit hex (#RRGGBBAA) to 6-digit (#RRGGBB) to satisfy backend validation
 const toHex6 = (v: unknown): unknown => {
@@ -123,12 +135,45 @@ export const themesApi = {
     return response.json();
   },
 
-  async getEmailPreview(flowSlug: string, eventType: string): Promise<string> {
+  async getDefaultEmailBody(
+    flowSlug: string,
+    eventType: string,
+    appSlug?: string | null
+  ): Promise<{ subject: string; body_html: string }> {
+    const params = appSlug ? `?app_slug=${appSlug}` : '';
     const response = await fetch(
-      `${API_BASE}/api/v1/themes/${flowSlug}/emails/preview/${eventType}`,
+      `${API_BASE}/api/v1/themes/${flowSlug}/emails/default-body/${eventType}${params}`,
+      { method: 'GET', headers: getHeaders() }
+    );
+    if (!response.ok) throw new Error(`Failed to fetch default email body: ${response.statusText}`);
+    return response.json();
+  },
+
+  async getEmailPreview(flowSlug: string, eventType: string, appSlug?: string | null): Promise<string> {
+    const params = appSlug ? `?app_slug=${appSlug}` : '';
+    const response = await fetch(
+      `${API_BASE}/api/v1/themes/${flowSlug}/emails/preview/${eventType}${params}`,
       { method: 'GET', headers: getHeaders() }
     );
     if (!response.ok) throw new Error(`Email preview failed: ${response.statusText}`);
     return response.text();
+  },
+
+  async getEmailTemplates(): Promise<{
+    templates: Record<string, {
+      name: string;
+      description: string;
+      default_subject: string;
+      default_body: string;
+    }>;
+    variables: Array<{ variable: string; description: string }>;
+    event_types: string[];
+    count: number;
+  }> {
+    const response = await fetch(`${API_BASE}/api/v1/public/email-templates`, {
+      method: 'GET',
+    });
+    if (!response.ok) throw new Error(`Failed to fetch email templates: ${response.statusText}`);
+    return response.json();
   },
 };

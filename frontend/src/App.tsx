@@ -2,11 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useTheme } from './hooks/useTheme';
 import { ThemeSelector } from './components/ThemeSelector';
 import { LoginPreview } from './components/LoginPreview';
+import { EmailEditorSplit } from './components/EmailEditorSplit';
 import { ConfigPanel } from './components/ConfigPanel';
 import { themesApi } from './api/themesApi';
 import { Theme } from './types/theme';
+import { TenantProvider, useTenant } from './contexts/TenantContext';
 
-export const App: React.FC = () => {
+const AppContent: React.FC = () => {
+  const { tenant, loading: tenantLoading, error: tenantError } = useTenant();
   const {
     currentSlug,
     theme,
@@ -27,6 +30,9 @@ export const App: React.FC = () => {
   const [themesList, setThemesList] = useState<Theme[]>([]);
   const [authentikApps, setAuthentikApps] = useState<{ slug: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewMode, setPreviewMode] = useState<'login' | 'email'>('login');
+  const [activeEmailEvent, setActiveEmailEvent] = useState<string>('password_reset');
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
 
   const fetchApps = async () => {
     try {
@@ -208,12 +214,19 @@ export const App: React.FC = () => {
       {/* Top Navigation Header Bar */}
       <header className="h-16 shrink-0 bg-white border-b border-gray-200 px-6 flex items-center justify-between shadow-sm z-30">
         <div className="flex items-center gap-3">
-          <div className="bg-[#4272A5] text-white p-2 rounded-lg font-black text-sm tracking-wider">
+          <div style={{ backgroundColor: tenant?.primary_color || '#4272A5' }} className="text-white p-2 rounded-lg font-black text-sm tracking-wider">
             CA
           </div>
           <div>
-            <h1 className="font-extrabold text-base text-gray-800 leading-none">Authentik Login Manager</h1>
-            <span className="text-[10px] text-gray-400 font-semibold tracking-widest uppercase">CASMARTS SAAS INTERNAL</span>
+            <h1 className="font-extrabold text-base text-gray-800 leading-none">
+              Authentik Login Manager {tenant ? `- ${tenant.tenant_name}` : ''}
+            </h1>
+            {tenant && (
+              <span className="text-[10px] text-gray-400 font-semibold tracking-widest uppercase">{tenant.domain_pattern}</span>
+            )}
+            {tenantLoading && (
+              <span className="text-[10px] text-blue-400 font-semibold tracking-widest uppercase">Cargando tenant...</span>
+            )}
           </div>
         </div>
 
@@ -246,14 +259,65 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* Left Column Preview (~60%) */}
-        <section className="flex-1 h-full relative bg-gray-800">
-          <LoginPreview theme={theme} />
+        {/* Left Column Preview (~60%) — sin tenant seleccionado, no muestra nada */}
+        <section className="flex-1 h-full relative bg-gray-800 flex flex-col">
+          {selectedTenantId ? (
+            <>
+              {/* Preview Mode Toggle */}
+              <div className="flex gap-0 bg-gray-900 border-b border-gray-700 shrink-0">
+                <button
+                  onClick={() => setPreviewMode('login')}
+                  className={`flex-1 py-3 px-4 text-sm font-semibold transition-all border-b-2 ${
+                    previewMode === 'login'
+                      ? 'border-blue-500 text-blue-400 bg-gray-800'
+                      : 'border-transparent text-gray-400 hover:text-gray-300'
+                  }`}
+                >
+                  🔐 Vista Login
+                </button>
+                <button
+                  onClick={() => setPreviewMode('email')}
+                  className={`flex-1 py-3 px-4 text-sm font-semibold transition-all border-b-2 ${
+                    previewMode === 'email'
+                      ? 'border-blue-500 text-blue-400 bg-gray-800'
+                      : 'border-transparent text-gray-400 hover:text-gray-300'
+                  }`}
+                >
+                  📧 Vista Correo
+                </button>
+              </div>
+
+              {/* Preview Content */}
+              <div className="flex-1 overflow-hidden">
+                {previewMode === 'login' && <LoginPreview theme={theme} />}
+                {previewMode === 'email' && (
+                  <EmailEditorSplit
+                    theme={theme}
+                    activeEventType={activeEmailEvent}
+                    onUpdateEmailBody={updateEmailBody}
+                    onSelectEvent={setActiveEmailEvent}
+                  />
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-center p-8">
+              <div>
+                <div className="text-5xl mb-4">🏢</div>
+                <h2 className="text-white text-lg font-semibold mb-2">Selecciona un tenant para comenzar</h2>
+                <p className="text-gray-400 text-sm max-w-sm">
+                  Elige un tenant en el panel de configuración para ver y editar su portal de login y sus plantillas de correo.
+                </p>
+              </div>
+            </div>
+          )}
         </section>
 
-        {/* Right Column Customizer Drawer Panel (~40%) */}
-        <section className="w-[380px] shrink-0 h-full">
-          <ConfigPanel
+        {/* Right Column Customizer Drawer Panel (~40%) - Hidden in email edit mode.
+            Se fuerza visible sin tenant seleccionado, para que el selector siga alcanzable. */}
+        {(previewMode === 'login' || !selectedTenantId) && (
+          <section className="w-[380px] shrink-0 h-full">
+            <ConfigPanel
             theme={theme}
             isDirty={isDirty}
             savePhase={savePhase}
@@ -264,11 +328,21 @@ export const App: React.FC = () => {
             onRetryDeploy={retryDeploy}
             authentikApps={authentikApps}
             onChangeApp={handleChangeApp}
-            onUpdateEmailBody={updateEmailBody}
+            selectedTenantId={selectedTenantId}
+            onSelectTenant={(tenantId) => setSelectedTenantId(tenantId)}
           />
-        </section>
+          </section>
+        )}
       </main>
     </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <TenantProvider>
+      <AppContent />
+    </TenantProvider>
   );
 };
 

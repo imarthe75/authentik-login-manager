@@ -242,32 +242,41 @@ async def get_theme_image(
         logger.warning(f"Image for field '{field}' is not set in database for theme ID {db_theme.id}")
         raise HTTPException(status_code=404, detail=f"Image for field '{field}' is not set.")
 
+    # Solo rasters seguros — se excluye deliberadamente image/svg+xml, que puede
+    # contener <script> embebido y habilitar XSS al servirse inline.
+    ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp", "image/x-icon"}
+
     try:
-        # Extract base64 and MIME type
         pattern = r"^data:(image/[a-zA-Z0-9\+\-\.]+);base64,(.+)$"
         match = re.match(pattern, base64_str.strip())
-        if match:
-            content_type = match.group(1)
-            raw_b64 = match.group(2)
-        else:
-            content_type = "image/png"
-            raw_b64 = base64_str
+        if not match:
+            # No adivinar el tipo de datos no reconocidos: podría no ser una imagen.
+            logger.error(f"Malformed base64 data URI for field '{field}' on theme {db_theme.id}")
+            raise HTTPException(status_code=422, detail="Stored image data is not a valid data URI.")
 
-        image_data = base64.b64decode(raw_b64)
+        content_type = match.group(1).lower()
+        if content_type not in ALLOWED_IMAGE_TYPES:
+            logger.error(f"Rejected disallowed image MIME type '{content_type}' for field '{field}'")
+            raise HTTPException(status_code=422, detail=f"Unsupported image type: {content_type}")
+
+        raw_b64 = match.group(2)
+        image_data = base64.b64decode(raw_b64, validate=True)
         logger.info(f"Successfully decoded and serving {field} image ({len(image_data)} bytes, {content_type})")
         return Response(content=image_data, media_type=content_type)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error decoding image for field '{field}': {e}")
-        raise HTTPException(status_code=500, detail=f"Error decoding image: {str(e)}")
+        raise HTTPException(status_code=422, detail="Error decoding stored image data.")
 
 @router.post("/theme/invalidate-cache/{flow_slug}", status_code=status.HTTP_200_OK)
 async def invalidate_cache(flow_slug: str):
     logger.info(f"Invalidating cache for flow_slug='{flow_slug}'")
-    
+
     # Delete global and direct keys
     await cache.delete(f"theme:{flow_slug}:global")
     await cache.delete(f"theme:{flow_slug}")
-    
+
     # Delete all application-specific keys matching the pattern using the underlying Valkey client
     if cache.redis:
         try:
@@ -278,5 +287,160 @@ async def invalidate_cache(flow_slug: str):
                 logger.info(f"Successfully invalidated {len(keys)} cached keys matching '{pattern}' in Valkey")
         except Exception as e:
             logger.error(f"Error invalidating cache pattern for '{flow_slug}': {e}")
-            
+
     return {"status": "success", "message": f"Cache for flow '{flow_slug}' invalidated successfully."}
+
+
+@router.get("/email-templates")
+async def get_email_templates_public():
+    """
+    Obtiene todos los templates de email predefinidos (sin autenticación).
+    Carga templates reales desde scratchpad/templates/ si existen.
+    """
+    from pathlib import Path
+    import re
+    from app.models.email_body import EMAIL_EVENT_TYPES
+
+    try:
+        templates_data = {}
+
+        # Mapeo de eventos a archivos de plantilla (prioridad: scratchpad > backend)
+        template_mapping = {
+            'password_reset': ['recuperar_password.html', 'plantilla_cambio_password.html', 'nueva_password.html'],
+            'email_verification': ['prototipo_alta.html'],
+            'new_account': ['prototipo_alta.html'],
+            'account_lockout': ['prototipo_baja.html'],
+            'security_change': ['prototipo_cambio_password.html', 'prototipo_actualizacion.html'],
+        }
+
+        template_labels = {
+            'password_reset': 'Restablecer contraseña',
+            'email_verification': 'Verificación de correo',
+            'new_account': 'Nueva cuenta',
+            'account_lockout': 'Bloqueo de cuenta',
+            'security_change': 'Cambio de seguridad',
+        }
+
+        template_descriptions = {
+            'password_reset': 'Se envía cuando un usuario solicita restablecer su contraseña',
+            'email_verification': 'Se envía cuando un usuario necesita verificar su correo electrónico',
+            'new_account': 'Se envía cuando se crea una nueva cuenta de usuario',
+            'account_lockout': 'Se envía cuando una cuenta es desactivada o bloqueada',
+            'security_change': 'Se envía cuando se realizan cambios en la configuración de seguridad',
+        }
+
+        # Cargar desde scratchpad primero
+        scratchpad_dir = Path(__file__).parent.parent.parent.parent / "scratchpad" / "templates"
+        backend_dir = Path(__file__).parent.parent / "templates" / "email"
+
+        for event_type in EMAIL_EVENT_TYPES:
+            content = None
+            file_path = None
+
+            # Intentar cargar desde scratchpad
+            if scratchpad_dir.exists():
+                for template_filename in template_mapping.get(event_type, []):
+                    candidate_file = scratchpad_dir / template_filename
+                    if candidate_file.exists():
+                        try:
+                            content = candidate_file.read_text(encoding='utf-8')
+                            file_path = str(candidate_file)
+                            logger.info(f"Loaded template {event_type} from scratchpad: {template_filename}")
+                            break
+                        except Exception as e:
+                            logger.warning(f"Failed to read {candidate_file}: {e}")
+                            continue
+
+            # Fallback a backend templates
+            if not content:
+                backend_file = backend_dir / f'{event_type}.html.j2'
+                if backend_file.exists():
+                    try:
+                        content = backend_file.read_text(encoding='utf-8')
+                        file_path = str(backend_file)
+                        logger.info(f"Loaded template {event_type} from backend: {event_type}.html.j2")
+                    except Exception as e:
+                        logger.warning(f"Failed to read backend template {event_type}: {e}")
+
+            # Si se encontró contenido, agregarlo
+            if content:
+                subject_match = re.search(
+                    r"\{\{subject\}\}|\[%\s*set\s+subject\s*=\s*['\"]([^'\"]*)['\"]|<title[^>]*>([^<]*)</title>",
+                    content
+                )
+                subject = subject_match.group(1) or subject_match.group(2) if subject_match else template_labels.get(
+                    event_type, event_type
+                )
+
+                templates_data[event_type] = {
+                    "name": template_labels.get(event_type, event_type),
+                    "description": template_descriptions.get(event_type, ""),
+                    "default_subject": subject,
+                    "default_body": content,
+                    "file_path": file_path,
+                    "source": "scratchpad" if "scratchpad" in (file_path or "") else "backend"
+                }
+
+        # Variables estándar — debe reflejar exactamente las claves sustituidas
+        # en preview_email()/send_test_email() (admin.py). Si agregas una
+        # variable nueva a esos `preview_subs`/`substitutions`, agrégala aquí
+        # también o quedará fuera del catálogo que ve el usuario en el editor.
+        variables_data = [
+            # --- DATOS DEL USUARIO ---
+            {"variable": "{{nombre_usuario}}", "description": "Nombre completo del usuario (Israel Martínez)"},
+            {"variable": "{{nombre_usuario_nombre}}", "description": "Solo nombre del usuario (Israel)"},
+            {"variable": "{{nombre_usuario_apellido}}", "description": "Solo apellido del usuario (Martínez)"},
+            {"variable": "{{usuario_login}}", "description": "Usuario/ID de acceso (israelm)"},
+            {"variable": "{{usuario_email}}", "description": "Correo electrónico del usuario"},
+
+            # --- DATOS DEL SISTEMA ---
+            {"variable": "{{nombre_sistema}}", "description": "Nombre del sistema donde ocurre el evento"},
+            {"variable": "{{empresa_nombre}}", "description": "Nombre de la empresa"},
+            {"variable": "{{aplicacion_nombre}}", "description": "Nombre de la aplicación (Portal RH, CRM, etc.)"},
+            {"variable": "{{aplicacion_slug}}", "description": "Identificador único de la aplicación"},
+
+            # --- DATOS DE MARCA ---
+            {"variable": "{{color_primario}}", "description": "Color primario de la marca (hex)"},
+            {"variable": "{{logo_url}}", "description": "URL del logo corporativo"},
+
+            # --- DATOS DEL EVENTO ---
+            {"variable": "{{fecha_evento}}", "description": "Fecha y hora del evento (30/06/2026 14:32)"},
+            {"variable": "{{fecha_hora_cambio}}", "description": "Fecha/hora exacta del cambio (timestamp)"},
+            {"variable": "{{realizado_por}}", "description": "Quién ejecutó la acción (usuario o sistema automático)"},
+
+            # --- CONTEXTO DE RED/SEGURIDAD ---
+            {"variable": "{{ip_origen}}", "description": "IP remota desde donde se realizó la acción (192.168.1.100)"},
+            {"variable": "{{navegador}}", "description": "Navegador/User-Agent (Mozilla/5.0...)"},
+            {"variable": "{{dispositivo}}", "description": "Dispositivo detectado (Chrome en Windows, etc.)"},
+
+            # --- DATOS DE ACCESO ---
+            {"variable": "{{url_acceso}}", "description": "Enlace de acceso al sistema"},
+            {"variable": "{{contacto_soporte}}", "description": "Correo/teléfono de soporte"},
+
+            # --- LEGALES Y CONFIGURACIÓN ---
+            {"variable": "{{footer_legal}}", "description": "Leyenda legal/confidencialidad"},
+            {"variable": "{{anio}}", "description": "Año para copyright"},
+
+            # --- ESPECÍFICAS POR EVENTO ---
+            {"variable": "{{password_temporal}}", "description": "[Alta] Contraseña temporal"},
+            {"variable": "{{rol_asignado}}", "description": "[Alta] Rol/perfil asignado"},
+            {"variable": "{{fecha_expiracion_password}}", "description": "[Alta] Vigencia de la contraseña"},
+            {"variable": "{{motivo_baja}}", "description": "[Baja] Motivo de la baja"},
+            {"variable": "{{fecha_efectiva}}", "description": "[Baja] Fecha en que se inhabilita el acceso"},
+            {"variable": "{{tabla_cambios}}", "description": "[Actualización] Tabla de cambios (HTML)"},
+        ]
+
+        return {
+            "templates": templates_data,
+            "variables": variables_data,
+            "event_types": list(EMAIL_EVENT_TYPES),
+            "count": len(templates_data),
+            "source": "scratchpad + backend fallback"
+        }
+
+    except Exception as e:
+        logger.error(f"Error loading email templates: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load email templates: {str(e)}"
+        )

@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import String, Text, CheckConstraint, UniqueConstraint
+from sqlalchemy import String, Text, CheckConstraint, UniqueConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
@@ -12,7 +12,7 @@ EMAIL_EVENT_TYPES = frozenset(
 class TenantEmailBody(Base):
     __tablename__ = "tenant_email_bodies"
     __table_args__ = (
-        UniqueConstraint('flow_slug', 'event_type', name='uq_email_bodies_flow_event'),
+        UniqueConstraint('tenant_id', 'flow_slug', 'event_type', name='uq_email_bodies_tenant_flow_event'),
         CheckConstraint(
             "event_type IN ('password_reset','new_account','account_lockout',"
             "'email_verification','security_change')",
@@ -22,6 +22,12 @@ class TenantEmailBody(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey('tenants.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
     )
     flow_slug: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     event_type: Mapped[str] = mapped_column(String(30), nullable=False)

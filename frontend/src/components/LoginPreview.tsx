@@ -1,15 +1,11 @@
 import React, { useState } from 'react';
 import DOMPurify from 'dompurify';
 import { Eye, EyeOff } from 'lucide-react';
-import { Theme, EmailEventType, EMAIL_EVENT_TYPES, EMAIL_EVENT_LABELS } from '../types/theme';
-import { EmailPreview } from './preview/EmailPreview';
+import { Theme } from '../types/theme';
 
 interface LoginPreviewProps {
   theme: Theme;
-  emailPreviewRefreshKey?: number;
 }
-
-type PreviewView = 'login' | 'email';
 
 // ── Inline SVGs for social buttons ────────────────────────────────────────
 
@@ -44,11 +40,9 @@ const hasSocial = (theme: Theme) =>
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme, emailPreviewRefreshKey }) => {
+export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme }) => {
   const [showPwd, setShowPwd] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [view, setView] = useState<PreviewView>('login');
-  const [activeEmailEvent, setActiveEmailEvent] = useState<EmailEventType>('password_reset');
 
   const hexToRgba = (hex: string, alpha: number) => {
     try {
@@ -76,84 +70,11 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme, emailPreviewR
   const sanitizedSysName = DOMPurify.sanitize(theme.system_name);
   const primaryColor = theme.primary_color;
 
-  // ── Email view ─────────────────────────────────────────────────────────
-  if (view === 'email') {
-    return (
-      <div className="relative w-full h-full overflow-hidden flex flex-col select-none bg-gray-100">
-        {/* Toolbar */}
-        <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-white border-b border-gray-200 z-10">
-          <button
-            type="button"
-            onClick={() => setView('login')}
-            className="text-xs text-gray-500 hover:text-blue-600 border border-gray-300 rounded px-2.5 py-1 transition-colors"
-          >
-            ← Vista login
-          </button>
-          <span className="text-xs text-gray-400">|</span>
-          <span className="text-xs font-semibold text-gray-600">Vista previa correo:</span>
-          <div className="flex gap-1 flex-wrap">
-            {EMAIL_EVENT_TYPES.map(evt => (
-              <button
-                key={evt}
-                type="button"
-                onClick={() => setActiveEmailEvent(evt)}
-                className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                  activeEmailEvent === evt
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                {EMAIL_EVENT_LABELS[evt]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Email preview */}
-        <div className="flex-1 overflow-auto p-4 min-h-0">
-          <EmailPreview
-            flowSlug={theme.authentik_flow_slug}
-            eventType={activeEmailEvent}
-            refreshKey={emailPreviewRefreshKey}
-            liveBodyHtml={theme.email_bodies?.[activeEmailEvent]?.body_html}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  // ── Login view ─────────────────────────────────────────────────────────
   return (
     <div className="relative w-full h-full overflow-hidden flex items-stretch select-none">
       {/* Background */}
       <div className="absolute inset-0 z-0" style={bgStyle()} />
       <div className="absolute inset-0 z-[1] bg-black/10 backdrop-brightness-95" />
-
-      {/* View switcher */}
-      <div className="absolute top-3 right-3 z-20 flex gap-1.5">
-        <button
-          type="button"
-          onClick={() => setView('login')}
-          className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-            view === 'login'
-              ? 'border-white/70 bg-white/30 text-white backdrop-blur'
-              : 'border-white/40 bg-white/10 text-white/70 hover:bg-white/20'
-          }`}
-        >
-          Login
-        </button>
-        <button
-          type="button"
-          onClick={() => setView('email')}
-          className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-            (view as string) === 'email'
-              ? 'border-white/70 bg-white/30 text-white backdrop-blur'
-              : 'border-white/40 bg-white/10 text-white/70 hover:bg-white/20'
-          }`}
-        >
-          Correo
-        </button>
-      </div>
 
       {/* Main card */}
       <div

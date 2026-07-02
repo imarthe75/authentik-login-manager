@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base
 from app.cache import cache
+from app.routers.admin import tenant_router
+from app.routers.email_sync import email_sync_router
 from app.routers import admin, public
 
 logging.basicConfig(level=logging.INFO)
@@ -46,8 +48,21 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Admin-Key", "Authorization"],
+    allow_headers=["Content-Type", "X-Admin-Key", "Authorization", "X-Tenant-Domain", "X-Forwarded-Host"],
 )
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    # Respuestas de este servicio son JSON/HTML de previsualización, nunca HTML de
+    # terceros ejecutable como top-level document — CSP restrictiva por defecto.
+    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+    return response
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -65,6 +80,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 # Include Routers
 app.include_router(admin.router)
+app.include_router(tenant_router)
+app.include_router(email_sync_router)
 app.include_router(public.router)
 
 @app.get("/health", status_code=status.HTTP_200_OK, tags=["Health"])

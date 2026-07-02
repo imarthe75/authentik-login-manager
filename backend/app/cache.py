@@ -49,6 +49,21 @@ class CacheClient:
             logging.error(f"Valkey DELETE error: {e}")
             return False
 
+    async def incr_with_ttl(self, key: str, ttl_seconds: int) -> Optional[int]:
+        """Atomically increments a counter, setting its TTL only on first creation.
+        Used for rate limiting. Returns None if Valkey is unavailable (caller should
+        fail open rather than block all traffic on a cache outage)."""
+        if not self.redis:
+            return None
+        try:
+            count = await self.redis.incr(key)
+            if count == 1:
+                await self.redis.expire(key, ttl_seconds)
+            return count
+        except Exception as e:
+            logging.error(f"Valkey INCR error: {e}")
+            return None
+
     async def close(self):
         if self.redis:
             await self.redis.close()

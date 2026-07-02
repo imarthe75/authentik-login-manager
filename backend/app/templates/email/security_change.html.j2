@@ -1,3 +1,39 @@
-[% set subject = subject or 'Cambio de seguridad en tu cuenta' %]
-[% set body_html = body_html or '<h2 style="font-size:20px;font-weight:bold;color:#222;margin:0 0 16px;">Aviso de seguridad</h2><p style="margin:0 0 16px;">Hola <strong>{{ user.username }}</strong>,</p><p style="margin:0 0 16px;">Se ha realizado un cambio de seguridad en tu cuenta en <strong>' + (tenant_name or 'CASMARTS') + '</strong>.</p><ul style="margin:0 0 16px;padding-left:20px;"><li style="margin-bottom:8px;">Fecha y hora: {{ token }}</li><li style="margin-bottom:8px;">Usuario: {{ user.username }}</li></ul><p style="margin:0 0 16px;">Si realizaste este cambio, no es necesaria ninguna acción.</p><p style="margin:24px 0 0;font-size:12px;color:#888;">Si no reconoces este cambio, contacta al administrador del sistema de inmediato.</p>' %]
-[% include "base_email.html.j2" %]
+[% set subject = subject or 'Tu contraseña fue actualizada' %]
+[% set badge_text = 'Cambio de contraseña' %]
+[% set badge_color = '#EF6C00' %]
+[% set cta_url = None %]
+[% set security_note = '<strong>¿No reconoces este cambio?</strong><br>Si tú no solicitaste esta actualización, tu cuenta podría estar en riesgo. Contacta de inmediato a <a href="mailto:{{contacto_soporte}}" style="color:#EF6C00;">{{contacto_soporte}}</a> para asegurar tu cuenta.' %]
+[% set security_note_bg = '#fff4e5' %]
+[% set security_note_color = '#EF6C00' %]
+[% if not body_html %]
+[% set body_html %]
+<h1 style="font-size:20px;margin:0 0 8px 0;color:#1d1d1f;">Hola {{nombre_usuario}},</h1>
+<p style="font-size:14px;line-height:1.6;margin:0;color:#3c3c43;">
+  Te confirmamos que la contraseña de tu cuenta en <strong>[[ tenant_name ]]</strong> fue actualizada
+  correctamente.
+</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e5ea;border-radius:6px;margin-top:20px;">
+  <tr>
+    <td style="padding:10px 14px;font-size:13px;color:#6e6e73;width:42%;border-bottom:1px solid #e5e5ea;">Sistema</td>
+    <td style="padding:10px 14px;font-size:13px;color:#1d1d1f;border-bottom:1px solid #e5e5ea;">[[ tenant_name ]]</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 14px;font-size:13px;color:#6e6e73;border-bottom:1px solid #e5e5ea;">Usuario / login</td>
+    <td style="padding:10px 14px;font-size:13px;color:#1d1d1f;border-bottom:1px solid #e5e5ea;">{{usuario_login}}</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 14px;font-size:13px;color:#6e6e73;border-bottom:1px solid #e5e5ea;">Fecha y hora del cambio</td>
+    <td style="padding:10px 14px;font-size:13px;color:#1d1d1f;border-bottom:1px solid #e5e5ea;">{{fecha_hora_cambio}}</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 14px;font-size:13px;color:#6e6e73;border-bottom:1px solid #e5e5ea;">Dirección IP</td>
+    <td style="padding:10px 14px;font-size:13px;color:#1d1d1f;border-bottom:1px solid #e5e5ea;">{{ip_origen}}</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 14px;font-size:13px;color:#6e6e73;">Dispositivo / navegador</td>
+    <td style="padding:10px 14px;font-size:13px;color:#1d1d1f;">{{dispositivo}}</td>
+  </tr>
+</table>
+[% endset %]
+[% endif %]
+[%- include "email_base_unified.html.j2" %]

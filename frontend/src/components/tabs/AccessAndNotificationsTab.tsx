@@ -1,7 +1,5 @@
-import React, { useState } from 'react';
-import { Theme, EmailEventType, EmailBody, EMAIL_EVENT_TYPES, EMAIL_EVENT_LABELS, EMPTY_EMAIL_BODY } from '../../types/theme';
-import { themesApi } from '../../api/themesApi';
-import RichTextEditor from '../RichTextEditor';
+import React from 'react';
+import { Theme } from '../../types/theme';
 
 // ── Inline SVG icons for social providers ─────────────────────────────────
 
@@ -30,16 +28,6 @@ const GovIdIcon = () => (
     <path d="M13 9h5M13 12h4M13 15h3" stroke="#374151" strokeWidth="1.5" strokeLinecap="round"/>
   </svg>
 );
-
-// ── Variable guide ─────────────────────────────────────────────────────────
-
-const VARIABLE_GUIDE = [
-  { var: '{{ user.username }}', desc: 'Nombre de usuario' },
-  { var: '{{ user.email }}', desc: 'Correo electrónico del usuario' },
-  { var: '{{ url }}', desc: 'Enlace de acción (reset, activación, etc.)' },
-  { var: '{{ token }}', desc: 'Token de un solo uso' },
-  { var: '{{ tenant.name }}', desc: 'Nombre del tenant/sistema' },
-];
 
 // ── Toggle helper ──────────────────────────────────────────────────────────
 
@@ -82,51 +70,12 @@ const Toggle: React.FC<ToggleProps> = ({ checked, onChange, disabled, label, des
 interface Props {
   theme: Theme;
   onUpdateField: <K extends keyof Theme>(key: K, value: Theme[K]) => void;
-  onUpdateEmailBody: (eventType: string, body: EmailBody) => void;
 }
 
 export const AccessAndNotificationsTab: React.FC<Props> = ({
   theme,
   onUpdateField,
-  onUpdateEmailBody,
 }) => {
-  const [activeEvent, setActiveEvent] = useState<EmailEventType>('password_reset');
-  const [copiedVar, setCopiedVar] = useState<string | null>(null);
-  const [testEmail, setTestEmail] = useState('');
-  const [testStatus, setTestStatus] = useState<{ ok: boolean; msg: string } | null>(null);
-  const [testSending, setTestSending] = useState(false);
-
-  const currentBody: EmailBody = theme.email_bodies?.[activeEvent] ?? { ...EMPTY_EMAIL_BODY };
-
-  const handleCopyVar = (v: string) => {
-    navigator.clipboard.writeText(v).catch(() => {});
-    setCopiedVar(v);
-    setTimeout(() => setCopiedVar(null), 1500);
-  };
-
-  const handleSendTest = async () => {
-    if (!testEmail.trim()) return;
-    setTestSending(true);
-    setTestStatus(null);
-    try {
-      await themesApi.sendTestEmail(
-        theme.authentik_flow_slug,
-        activeEvent,
-        testEmail.trim(),
-        theme.authentik_app_slug ?? undefined,
-      );
-      setTestStatus({ ok: true, msg: `✅ Enviado a ${testEmail}` });
-    } catch (err: any) {
-      setTestStatus({ ok: false, msg: `❌ ${err?.message ?? 'Error al enviar'}` });
-    } finally {
-      setTestSending(false);
-    }
-  };
-
-  const handleBodyChange = (field: keyof EmailBody, value: string) => {
-    onUpdateEmailBody(activeEvent, { ...currentBody, [field]: value });
-  };
-
   return (
     <div className="space-y-8">
 
@@ -251,12 +200,11 @@ export const AccessAndNotificationsTab: React.FC<Props> = ({
         </h3>
 
         <div className="space-y-4">
-          <Toggle
-            label="Heredar diseño del login en correos"
-            description="Usa los colores y logo del portal como base de las plantillas"
-            checked={theme.email_template_type === 'integrated'}
-            onChange={v => onUpdateField('email_template_type', v ? 'integrated' : 'custom_per_event')}
-          />
+          <div className="px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg">
+            <p className="text-[10px] text-blue-700 leading-relaxed">
+              ℹ️ Los correos siempre usan el color primario y el logo de este portal — no hay una opción de diseño independiente por correo.
+            </p>
+          </div>
 
           {/* Footer text */}
           <div>
@@ -275,122 +223,12 @@ export const AccessAndNotificationsTab: React.FC<Props> = ({
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
+
+          <p className="text-[10px] text-gray-400 leading-relaxed">
+            💡 Para editar el asunto y contenido de cada tipo de correo (restablecer contraseña, alta de usuario, etc.), usa la pestaña <strong>📧 Vista Correo</strong>.
+          </p>
         </div>
 
-        {/* Event selector */}
-        <div className="mt-5">
-          <p className="text-xs font-semibold text-gray-700 mb-2">Evento de correo</p>
-          <div className="flex flex-wrap gap-1.5">
-            {EMAIL_EVENT_TYPES.map(evt => (
-              <button
-                key={evt}
-                type="button"
-                onClick={() => setActiveEvent(evt)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
-                  activeEvent === evt
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                {EMAIL_EVENT_LABELS[evt]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Email body editor */}
-        <div className="mt-4 border border-gray-200 rounded-xl overflow-hidden">
-          {/* Subject */}
-          <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              Asunto
-              <span className="ml-1 text-gray-400 font-normal">
-                ({(currentBody.subject ?? '').length}/200)
-              </span>
-            </label>
-            <input
-              type="text"
-              maxLength={200}
-              value={currentBody.subject}
-              onChange={e => handleBodyChange('subject', e.target.value)}
-              placeholder={`Asunto para: ${EMAIL_EVENT_LABELS[activeEvent]}`}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
-          </div>
-
-          {/* Body HTML */}
-          <div className="px-4 pt-3 pb-1">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-semibold text-gray-700">Cuerpo del correo</label>
-            </div>
-            <RichTextEditor
-              value={currentBody.body_html}
-              onChange={v => handleBodyChange('body_html', v)}
-              placeholder={`Hola {{ user.username }}, escribe aquí el contenido del correo para "${EMAIL_EVENT_LABELS[activeEvent]}"…`}
-              minHeight="180px"
-            />
-            {currentBody.body_html.length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">
-                Sin contenido — se usará el texto por defecto del sistema al enviar.
-              </p>
-            )}
-          </div>
-
-          {/* Variable guide */}
-          <div className="px-4 pb-3 pt-2">
-            <p className="text-xs font-semibold text-gray-500 mb-2">Variables disponibles (clic para copiar)</p>
-            <div className="flex flex-wrap gap-1.5">
-              {VARIABLE_GUIDE.map(({ var: v, desc }) => (
-                <button
-                  key={v}
-                  type="button"
-                  title={desc}
-                  onClick={() => handleCopyVar(v)}
-                  className={`px-2 py-1 rounded text-xs font-mono border transition-colors ${
-                    copiedVar === v
-                      ? 'border-green-400 bg-green-50 text-green-700'
-                      : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-400'
-                  }`}
-                >
-                  {copiedVar === v ? '✓ copiado' : v}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Envío de correo de prueba */}
-          <div className="px-4 pb-4 pt-3 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-600 mb-2">
-              Correo de prueba
-              <span className="ml-1.5 text-gray-400 font-normal">
-                — {EMAIL_EVENT_LABELS[activeEvent]}
-              </span>
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="email"
-                value={testEmail}
-                onChange={e => { setTestEmail(e.target.value); setTestStatus(null); }}
-                onKeyDown={e => e.key === 'Enter' && handleSendTest()}
-                placeholder="destinatario@ejemplo.com"
-                className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-              />
-              <button
-                type="button"
-                onClick={handleSendTest}
-                disabled={testSending || !testEmail.trim()}
-                className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-              >
-                {testSending ? 'Enviando…' : '✉ Enviar prueba'}
-              </button>
-            </div>
-            {testStatus && (
-              <p className={`text-xs mt-1.5 font-medium ${testStatus.ok ? 'text-green-600' : 'text-red-600'}`}>
-                {testStatus.msg}
-              </p>
-            )}
-          </div>
-        </div>
       </section>
     </div>
   );

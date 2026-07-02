@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Theme, EmailBodies } from '../types/theme';
 import { themesApi } from '../api/themesApi';
+import { toUserMessage } from '../utils/errors';
 
 export type SavePhase = 'idle' | 'saving' | 'deploying' | 'done' | 'deploy_error';
 
@@ -183,7 +184,7 @@ export const useTheme = () => {
       await themesApi.deployTheme(theme.authentik_flow_slug);
       setSavePhase('done');
     } catch (err: any) {
-      const msg = err?.message || 'Error al guardar o desplegar.';
+      const msg = toUserMessage(err, 'Error al guardar o desplegar.');
       if (currentPhase === 'saving') {
         setError(msg);
         setSavePhase('idle');
@@ -201,7 +202,7 @@ export const useTheme = () => {
       await themesApi.deployTheme(theme.authentik_flow_slug);
       setSavePhase('done');
     } catch (err: any) {
-      setDeployError(err?.message || 'Error al desplegar la plantilla en Authentik.');
+      setDeployError(toUserMessage(err, 'Error al desplegar la plantilla en Authentik.'));
       setSavePhase('deploy_error');
     }
   }, [theme.authentik_flow_slug]);

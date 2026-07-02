@@ -87,8 +87,8 @@ class ThemeCreate(ThemeBase):
     logo_top_base64: Optional[str] = None
     logo_bottom_base64: Optional[str] = None
     bg_image_base64: Optional[str] = None
-    logo_top_text: Optional[str] = None
-    logo_bottom_text: Optional[str] = None
+    logo_top_text: Optional[str] = Field(None, max_length=150)
+    logo_bottom_text: Optional[str] = Field(None, max_length=150)
 
 
 class ThemeUpdate(BaseModel):
@@ -117,8 +117,8 @@ class ThemeUpdate(BaseModel):
     logo_top_base64: Optional[str] = None
     logo_bottom_base64: Optional[str] = None
     bg_image_base64: Optional[str] = None
-    logo_top_text: Optional[str] = None
-    logo_bottom_text: Optional[str] = None
+    logo_top_text: Optional[str] = Field(None, max_length=150)
+    logo_bottom_text: Optional[str] = Field(None, max_length=150)
     is_active: Optional[bool] = None
     # Access & notifications
     allow_self_registration: Optional[bool] = None
@@ -159,8 +159,8 @@ class ThemeResponse(ThemeBase):
     logo_top_base64: Optional[str] = None
     logo_bottom_base64: Optional[str] = None
     bg_image_base64: Optional[str] = None
-    logo_top_text: Optional[str] = None
-    logo_bottom_text: Optional[str] = None
+    logo_top_text: Optional[str] = Field(None, max_length=150)
+    logo_bottom_text: Optional[str] = Field(None, max_length=150)
     created_at: datetime
     updated_at: datetime
 
@@ -197,8 +197,8 @@ class ThemePublic(BaseModel):
     has_logo_top: bool
     has_logo_bottom: bool
     has_bg_image: bool
-    logo_top_text: Optional[str] = None
-    logo_bottom_text: Optional[str] = None
+    logo_top_text: Optional[str] = Field(None, max_length=150)
+    logo_bottom_text: Optional[str] = Field(None, max_length=150)
     allow_self_registration: bool = False
     show_social_google: bool = False
     show_social_microsoft: bool = False
