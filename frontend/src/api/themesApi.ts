@@ -122,15 +122,38 @@ export const themesApi = {
     eventType: string,
     toEmail: string,
     appSlug?: string,
+    displayName?: string,
   ): Promise<{ status: string; to: string; subject: string }> {
     const response = await fetch(`${API_BASE}/api/v1/themes/${flowSlug}/emails/test`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ to_email: toEmail, event_type: eventType, app_slug: appSlug ?? null }),
+      body: JSON.stringify({ to_email: toEmail, event_type: eventType, app_slug: appSlug ?? null, display_name: displayName ?? null }),
     });
     if (!response.ok) {
       const detail = await response.json().catch(() => ({ detail: response.statusText }));
       throw new Error(detail?.detail || `Error al enviar: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  /**
+   * A diferencia de sendTestEmail (render local + SMTP directo), dispara el
+   * mecanismo real de Authentik para el evento (EmailStage real, o un
+   * evento real que atraviesa el puente de webhooks).
+   */
+  async sendTestEmailReal(
+    flowSlug: string,
+    eventType: string,
+    username?: string,
+  ): Promise<Record<string, unknown>> {
+    const response = await fetch(`${API_BASE}/api/v1/themes/${flowSlug}/emails/test-real`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ event_type: eventType, username: username ?? null }),
+    });
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(detail?.detail || `Error al disparar: ${response.statusText}`);
     }
     return response.json();
   },
@@ -160,15 +183,8 @@ export const themesApi = {
   },
 
   async getEmailTemplates(): Promise<{
-    templates: Record<string, {
-      name: string;
-      description: string;
-      default_subject: string;
-      default_body: string;
-    }>;
     variables: Array<{ variable: string; description: string }>;
     event_types: string[];
-    count: number;
   }> {
     const response = await fetch(`${API_BASE}/api/v1/public/email-templates`, {
       method: 'GET',

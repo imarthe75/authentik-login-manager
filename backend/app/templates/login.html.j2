@@ -398,6 +398,22 @@ var TRANSLATIONS = Object.assign({
     "enter your username or email address.": "Introduzca su nombre de usuario o correo electrónico."
 }, CUSTOM_TRANSLATIONS);
 
+// Apps con flow de registro dedicado (uno por app_slug, ver
+// core-casmarts/casmarts-app-enrollment.yaml) — cada uno asigna
+// automáticamente el grupo de esa app al usuario nuevo. Si client_id no está
+// en esta lista (app global o desconocida), se deja el link de registro por
+// defecto de Authentik sin tocar.
+var ENROLLMENT_APP_SLUGS = ['starter', 'consulta-smart', 'idp-smart', 'centinela-ai', 'kiwi', 'plane'];
+
+function rewriteEnrollLink(node) {
+    if (!node || node.tagName !== 'A') return;
+    var href = node.getAttribute('href');
+    if (!href || href.indexOf('/if/flow/default-source-enrollment/') === -1) return;
+    var clientId = new URL(window.location.href).searchParams.get('client_id') || '';
+    if (ENROLLMENT_APP_SLUGS.indexOf(clientId) === -1) return;
+    node.setAttribute('href', href.replace('/if/flow/default-source-enrollment/', '/if/flow/enrollment-' + clientId + '/'));
+}
+
 function translateNode(node) {
     if (!node) return;
     if (node.nodeType === 3) {
@@ -409,6 +425,7 @@ function translateNode(node) {
             }
         }
     } else if (node.nodeType === 1) {
+        rewriteEnrollLink(node);
         if (node.placeholder) {
             var pl = node.placeholder.trim().toLowerCase();
             if (TRANSLATIONS[pl]) {

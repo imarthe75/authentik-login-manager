@@ -42,9 +42,12 @@
 
 ```html
 {{color_primario}}        <!-- Hex color corporativo: #4272A5 -->
-{{logo_url}}             <!-- URL del logo corporativo -->
-{{logo_plataforma_url}}  <!-- URL del logo de la plataforma -->
+{{logo_url}}             <!-- URL del logo corporativo (header) -->
 ```
+
+El logo de "Plataforma de Administración" (pie de página) **no es una variable `{{ }}`** — se inyecta
+automáticamente en el wrapper (`email_base_unified.html.j2`) a partir del logo inferior configurado
+en el tema (ConfigPanel → Logos). No hace falta ni se puede insertar manualmente en el `body_html`.
 
 **Ejemplo de uso (en CSS inline):**
 ```html
@@ -119,21 +122,16 @@
 
 #### Alta de Usuario (new_account)
 ```html
-{{password_temporal}}           <!-- Contraseña temporal generada -->
-{{rol_asignado}}               <!-- Rol asignado: Administrador, Operador, etc. -->
-{{fecha_expiracion_password}}  <!-- Cuándo expira la contraseña temporal -->
+{{rol_asignado}}     <!-- Rol asignado: Administrador, Operador, etc. -->
 ```
 
-#### Baja de Usuario (account_lockout)
-```html
-{{motivo_baja}}      <!-- Por qué se desactiva la cuenta -->
-{{fecha_efectiva}}   <!-- Cuándo queda efectiva la baja -->
-```
+**Importante:** por mandato de producto, `new_account` **nunca envía una contraseña por correo**
+(ni siquiera temporal). El CTA "Establecer contraseña" usa el mismo flow de recuperación que
+`password_reset` (`{{url_acceso}}` → enlace de un solo uso, expira en 24h).
 
-#### Actualización de Datos (security_change)
-```html
-{{tabla_cambios}}    <!-- HTML con tabla de cambios (se inyecta dinámicamente) -->
-```
+Los eventos `account_lockout` (bloqueo temporal de seguridad, no una baja permanente) y
+`security_change` (confirmación de que la contraseña ya fue cambiada) usan únicamente las
+variables comunes de arriba — no tienen variables propias adicionales.
 
 ---
 
@@ -221,21 +219,12 @@
 
     <!-- Información adicional -->
     <p style="font-size: 12px; color: #666;">
-      <strong>Contraseña temporal:</strong> {{password_temporal}}<br>
-      <strong>Válida hasta:</strong> {{fecha_expiracion_password}}<br>
-      <strong>Por seguridad:</strong> Se recomienda cambiar la contraseña en tu primer acceso.
+      <strong>Por seguridad:</strong> el enlace de arriba es de un solo uso y expira en 24 horas.
     </p>
   </div>
 
-  <!-- Pie de página -->
-  <footer style="background-color: #f5f5f5; padding: 20px; text-align: center; border-top: 1px solid #ddd;">
-    <img src="{{logo_plataforma_url}}" alt="Platform Logo" style="max-height: 40px; margin-bottom: 10px;">
-    <p style="font-size: 11px; color: #999; margin: 5px 0;">
-      Mensaje automático - No responder<br>
-      {{footer_legal}}<br>
-      © {{anio}} {{empresa_nombre}}
-    </p>
-  </footer>
+  <!-- El pie de página (logo de plataforma + aviso automático + soporte + copyright)
+       lo agrega automáticamente el wrapper — no se escribe aquí. -->
 </body>
 </html>
 ```

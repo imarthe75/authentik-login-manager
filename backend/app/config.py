@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = ""
     SMTP_TLS: bool = True
+    # Conexión real a la API de Authentik: desplegar plantillas de email al
+    # EmailStage real y recibir webhooks de eventos reales (alta, cambio de
+    # contraseña, etc.) para enviarlos con las plantillas de Vista Correo.
+    AUTHENTIK_HOST: str = ""
+    AUTHENTIK_API_TOKEN: str = ""
+    # Secreto compartido que Authentik debe enviar en el header X-Webhook-Secret
+    # al llamar a /api/v1/webhooks/authentik-event — no confundir con ADMIN_API_KEY.
+    AUTHENTIK_WEBHOOK_SECRET: str = ""
 
     model_config = SettingsConfigDict(
         env_file=os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"),

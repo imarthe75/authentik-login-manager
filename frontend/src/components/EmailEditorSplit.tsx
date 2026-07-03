@@ -51,7 +51,7 @@ const EMAIL_EVENT_META: Record<string, { icon: string; desc: string; badgeClass:
   },
   new_account: {
     icon: '✨',
-    desc: 'Bienvenida con datos de acceso al crear una cuenta',
+    desc: 'Bienvenida con enlace para establecer contraseña por primera vez',
     badgeClass: 'bg-green-100 text-green-700 border-green-200',
   },
   account_lockout: {
@@ -93,15 +93,16 @@ const DEFAULT_VARIABLES = [
   { var: '{{contacto_soporte}}', desc: 'Correo/teléfono de soporte' },
   { var: '{{footer_legal}}', desc: 'Leyenda legal' },
   { var: '{{anio}}', desc: 'Año para copyright' },
-  { var: '{{password_temporal}}', desc: '[Alta] Contraseña temporal' },
   { var: '{{rol_asignado}}', desc: '[Alta] Rol asignado' },
-  { var: '{{fecha_expiracion_password}}', desc: '[Alta] Vigencia de contraseña' },
-  { var: '{{motivo_baja}}', desc: '[Baja] Motivo' },
-  { var: '{{fecha_efectiva}}', desc: '[Baja] Fecha efectiva' },
-  { var: '{{tabla_cambios}}', desc: '[Actualización] Tabla HTML' },
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Tipos con username requerido para la prueba real: se manda a un usuario
+// real existente (password_reset/email_verification) o se le provocan
+// intentos fallidos reales (account_lockout). new_account/security_change
+// usan su propio usuario descartable (qa-email-test) en el backend.
+const REAL_TEST_NEEDS_USERNAME = new Set(['password_reset', 'email_verification', 'account_lockout']);
 
 export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
   theme,
@@ -116,8 +117,12 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
   const [variables, setVariables] = useState(DEFAULT_VARIABLES);
   const [copiedVar, setCopiedVar] = useState<string | null>(null);
   const [testEmail, setTestEmail] = useState('');
+  const [testDisplayName, setTestDisplayName] = useState('');
   const [testStatus, setTestStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [testSending, setTestSending] = useState(false);
+  const [testUsername, setTestUsername] = useState('');
+  const [testRealStatus, setTestRealStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [testRealSending, setTestRealSending] = useState(false);
   const [isLive, setIsLive] = useState(false);
   const [liveHtml, setLiveHtml] = useState('');
   const [showVariables, setShowVariables] = useState(false);
@@ -230,12 +235,29 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
         activeEventType,
         trimmed,
         theme.authentik_app_slug ?? undefined,
+        testDisplayName.trim() || undefined,
       );
       setTestStatus({ ok: true, msg: `✅ Enviado a ${trimmed}` });
     } catch (err: any) {
       setTestStatus({ ok: false, msg: `❌ ${toUserMessage(err, 'Error al enviar')}` });
     } finally {
       setTestSending(false);
+    }
+  };
+
+  const handleSendTestReal = async () => {
+    const needsUsername = REAL_TEST_NEEDS_USERNAME.has(activeEventType);
+    const trimmed = testUsername.trim();
+    if (needsUsername && !trimmed) return;
+    setTestRealSending(true);
+    setTestRealStatus(null);
+    try {
+      await themesApi.sendTestEmailReal(theme.authentik_flow_slug, activeEventType, trimmed);
+      setTestRealStatus({ ok: true, msg: '✅ Disparado vía Authentik real' });
+    } catch (err: any) {
+      setTestRealStatus({ ok: false, msg: `❌ ${toUserMessage(err, 'Error al disparar')}` });
+    } finally {
+      setTestRealSending(false);
     }
   };
 
@@ -298,8 +320,9 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
               <RichTextEditor
                 value={currentBody.body_html}
                 onChange={(v) => handleBodyChange('body_html', v)}
-                placeholder={`Edita el contenido del correo...`}
+                placeholder={`Edita el contenido del correo... (escribe {{ para insertar una variable)`}
                 minHeight="100%"
+                variables={variables}
               />
             </div>
           </div>
@@ -321,6 +344,14 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
                 placeholder="destinatario@ejemplo.com"
                 className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
+              <input
+                type="text"
+                value={testDisplayName}
+                onChange={(e) => { setTestDisplayName(e.target.value); setTestStatus(null); }}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendTest()}
+                placeholder="Nombre (opcional, ej. Israel Martínez)"
+                className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
               <button
                 type="button"
                 onClick={handleSendTest}
@@ -330,11 +361,49 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
                 {testSending ? 'Enviando…' : '✉ Enviar prueba'}
               </button>
             </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Sin nombre, se adivina del correo (israel.martinez@... → "Israel Martinez") — útil poner uno real para buzones personales (gmail, hotmail).
+            </p>
             {testStatus && (
               <p className={`text-xs mt-1.5 font-medium ${testStatus.ok ? 'text-green-600' : 'text-red-600'}`}>
                 {testStatus.msg}
               </p>
             )}
+
+            {/* Prueba real vía Authentik: EmailStage/evento real, no SMTP directo */}
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <p className="text-xs font-semibold text-gray-600 mb-2">
+                Prueba real (Authentik)
+                {activeEventType === 'account_lockout' && (
+                  <span className="ml-1.5 text-amber-600 font-normal">— provoca 6 intentos fallidos reales, puede bloquear la cuenta</span>
+                )}
+              </p>
+              <div className="flex gap-2">
+                {REAL_TEST_NEEDS_USERNAME.has(activeEventType) && (
+                  <input
+                    type="text"
+                    value={testUsername}
+                    onChange={(e) => { setTestUsername(e.target.value); setTestRealStatus(null); }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendTestReal()}
+                    placeholder="username existente en Authentik"
+                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={handleSendTestReal}
+                  disabled={testRealSending || (REAL_TEST_NEEDS_USERNAME.has(activeEventType) && !testUsername.trim())}
+                  className="px-3 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                >
+                  {testRealSending ? 'Disparando…' : '⚡ Prueba real'}
+                </button>
+              </div>
+              {testRealStatus && (
+                <p className={`text-xs mt-1.5 font-medium ${testRealStatus.ok ? 'text-green-600' : 'text-red-600'}`}>
+                  {testRealStatus.msg}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>

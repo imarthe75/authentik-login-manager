@@ -9,6 +9,7 @@ from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from typing import List, Optional, Dict
 import uuid
+import httpx
 from pathlib import Path
 from types import SimpleNamespace
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Query, Request
@@ -343,122 +344,79 @@ async def preview_email(
     # Nombre legible del tenant: strip HTML de system_name ("CASMARTS<br>Core" → "CASMARTS Core")
     tenant_name = _strip_html_tags(theme.system_name) or theme.display_name or 'CASMARTS'
 
-    # Logos para correos: usar base64 directamente (garantiza que funcione en todos los clientes de correo)
-    # No usar URLs públicas para correos — pueden no ser accesibles desde servidores SMTP
+    # Logos para correos: se prefiere una URL pública (mejor compatibilidad con
+    # Outlook, que bloquea/rompe imágenes base64 embebidas) y se cae a base64
+    # si por lo que sea la URL pública no resuelve para el destinatario.
+    app_qs = f'?app={app_slug}' if app_slug else ''
     logo_url: Optional[str] = None
     logo_base64: Optional[str] = None
 
     # Prioridad: theme logo > tenant logo > None
     if theme.logo_top_base64:
+        logo_url = f'{settings.PUBLIC_API_BASE_URL}/api/v1/public/theme/{flow_slug}/image/logo_top{app_qs}'
         logo_base64 = theme.logo_top_base64
     elif tenant.logo_email_base64:
         logo_base64 = tenant.logo_email_base64
 
-    # Validar tamaño
+    # Validar tamaño del fallback base64
     if logo_base64 and len(logo_base64.encode()) > 200 * 1024:
         log.warning("Logo >200 KB para flow '%s' — omitiendo del correo.", flow_slug)
         logo_base64 = None
 
-    # Logo inferior: misma lógica
+    # Logo inferior (pie de página / "Plataforma de Administración"): misma lógica
     logo_bottom_url: Optional[str] = None
     logo_bottom_base64: Optional[str] = None
     if theme.logo_bottom_base64:
+        logo_bottom_url = f'{settings.PUBLIC_API_BASE_URL}/api/v1/public/theme/{flow_slug}/image/logo_bottom{app_qs}'
         logo_bottom_base64 = theme.logo_bottom_base64
         if logo_bottom_base64 and len(logo_bottom_base64.encode()) > 200 * 1024:
             log.warning("logo_bottom_base64 >200 KB para flow '%s' — omitiendo del correo.", flow_slug)
             logo_bottom_base64 = None
 
-    # Determinar el flow correcto según el evento
+    # Determinar el flow correcto según el evento. new_account usa el mismo
+    # flow de recuperación de contraseña que password_reset: nunca se envía
+    # una contraseña por correo, solo un enlace de un solo uso para
+    # establecerla la primera vez (mandato de producto).
     flow_map = {
         'password_reset': 'password-recovery',
         'email_verification': 'default-source-enrollment',
-        'new_account': 'default-source-enrollment',
+        'new_account': 'password-recovery',
         'account_lockout': 'default-authentication-flow',
         'security_change': 'default-user-settings-flow',
     }
     flow_slug = flow_map.get(event_type, 'default-authentication-flow')
     cta_url = f'https://auth.casmart.internal/if/flow/{flow_slug}/'
 
-    # 1. Renderizar el template PRIMERO (el body por defecto puede contener variables Authentik)
-    env = _build_email_jinja2_env()
-    template = env.get_template(f'{event_type}.html.j2')
-    html = template.render(
+    client_ip_preview = request.client.host if request.client else '192.168.1.100'
+    user_agent_preview = request.headers.get('user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+
+    html = render_event_email_html(
         theme=theme,
+        tenant=tenant,
+        event_type=event_type,
         body_html=body_html,
         subject=subject,
         logo_base64=logo_base64,
         logo_url=logo_url,
         logo_bottom_base64=logo_bottom_base64,
         logo_bottom_url=logo_bottom_url,
-        event_type=event_type,
         cta_url=cta_url,
         tenant_name=tenant_name,
+        substitution_values={
+            'usuario_login': username or 'usuario.ejemplo',
+            'usuario_email': user_email or 'usuario@casmarts.internal',
+            'nombre_usuario': 'Usuario Ejemplo',
+            'nombre_usuario_nombre': 'Usuario',
+            'nombre_usuario_apellido': 'Ejemplo',
+            'ip_origen': client_ip_preview,
+            'navegador': user_agent_preview[:80],
+            'dispositivo': 'Windows',
+            'token': 'TOK-PREVIEW-12345',
+            'realizado_por': 'Usuario: Usuario Ejemplo',
+            'aplicacion_nombre': 'Aplicación CaSmarts',
+            'aplicacion_slug': 'default',
+        },
     )
-
-    # 2. DESPUÉS sustituir variables Authentik en el HTML completo renderizado
-    import datetime
-
-    # Datos del usuario (preview)
-    user_login_preview = username or 'usuario.ejemplo'
-    user_email_preview = user_email or 'usuario@casmarts.internal'
-    user_name_full_preview = 'Usuario Ejemplo'
-    user_name_first_preview = 'Usuario'
-    user_name_last_preview = 'Ejemplo'
-
-    # Contexto de preview
-    client_ip_preview = request.client.host if request.client else '192.168.1.100'
-    user_agent_preview = request.headers.get('user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
-    current_year_preview = datetime.datetime.now().year
-
-    preview_subs = {
-        # URLs y acceso
-        '{{ url }}': cta_url,
-        '{{url_acceso}}': cta_url,
-
-        # Datos del usuario
-        '{{ user.username }}': user_login_preview,
-        '{{usuario_login}}': user_login_preview,
-        '{{ user.email }}': user_email_preview,
-        '{{usuario_email}}': user_email_preview,
-        '{{nombre_usuario}}': user_name_full_preview,
-        '{{nombre_usuario_nombre}}': user_name_first_preview,
-        '{{nombre_usuario_apellido}}': user_name_last_preview,
-
-        # Datos del sistema
-        '{{ tenant.name }}': tenant_name,
-        '{{nombre_sistema}}': tenant_name,
-        '{{aplicacion_nombre}}': 'Aplicación CaSmarts',
-        '{{aplicacion_slug}}': 'default',
-
-        # Contexto técnico/seguridad
-        '{{ip_origen}}': client_ip_preview,
-        '{{navegador}}': user_agent_preview[:80],
-        '{{dispositivo}}': 'Windows',
-
-        # Token y fechas
-        '{{ token }}': 'TOK-PREVIEW-12345',
-        '{{fecha_evento}}': datetime.datetime.now().strftime('%d/%m/%Y %H:%M'),
-        '{{fecha_hora_cambio}}': datetime.datetime.now().isoformat(),
-        '{{anio}}': str(current_year_preview),
-
-        # Variables genéricas
-        '{{empresa_nombre}}': 'C&A Smart Systems',
-        '{{contacto_soporte}}': 'soporte@casmarts.internal',
-        '{{realizado_por}}': 'Usuario: Usuario Ejemplo',
-        '{{footer_legal}}': 'Este mensaje es confidencial y para uso exclusivo del destinatario. Si lo recibiste por error, notifícalo y elimínalo.',
-
-        # Específicas de alta/baja/actualización (preview)
-        '{{password_temporal}}': 'TempPass#2026!',
-        '{{rol_asignado}}': 'Usuario estándar',
-        '{{fecha_expiracion_password}}': (datetime.datetime.now() + datetime.timedelta(days=3)).strftime('%d/%m/%Y'),
-        '{{motivo_baja}}': 'Solicitud administrativa',
-        '{{fecha_efectiva}}': (datetime.datetime.now() + datetime.timedelta(days=5)).strftime('%d/%m/%Y'),
-        '{{tabla_cambios}}': '',
-        '{{color_primario}}': theme.primary_color or '#4272A5',
-        '{{logo_url}}': logo_url or '',
-    }
-    for var, val in preview_subs.items():
-        html = html.replace(var, val)
 
     return HTMLResponse(content=html)
 
@@ -521,6 +479,13 @@ class TestEmailRequest(BaseModel):
     to_email: str
     event_type: str
     app_slug: Optional[str] = None
+    # Por defecto el nombre se adivina del local-part del email
+    # (israel.martinez@... → "Israel Martinez") — sirve para direcciones
+    # reales tipo nombre.apellido@empresa.com, pero da un nombre sin
+    # sentido para buzones personales (imarthe@hotmail.com → "Imarthe").
+    # Este override deja probar con el nombre real sin cambiar el correo
+    # de destino.
+    display_name: Optional[str] = None
 
     @field_validator('to_email', mode='after')
     @classmethod
@@ -546,16 +511,32 @@ def _strip_header_injection(value: str) -> str:
     return re.sub(r'[\r\n\x00-\x08\x0b\x0c\x0e-\x1f]', '', value or '').strip()
 
 
-def _send_smtp(to_email: str, subject: str, html: str, logo_bytes: bytes, logo_mime: str) -> None:
+def _send_smtp(
+    to_email: str,
+    subject: str,
+    html: str,
+    logo_bytes: bytes,
+    logo_mime: str,
+    logo_bottom_bytes: bytes = b'',
+    logo_bottom_mime: str = 'image/png',
+) -> None:
     if not settings.SMTP_HOST or not settings.SMTP_USER:
         raise ValueError("SMTP no configurado — añadir SMTP_HOST, SMTP_USER y SMTP_PASSWORD al .env")
 
     to_email = _strip_header_injection(to_email)
     subject = _strip_header_injection(subject)
 
-    CID = 'logo_casmarts_cid'
+    # El HTML renderiza <img src="https://.../image/logo_top|logo_bottom...">
+    # (URL pública) — aquí se reemplaza por cid: y se adjunta inline, para no
+    # depender de que el cliente de correo del destinatario pueda resolver esa
+    # URL (más confiable que la URL pública sola, y evita el bloqueo que
+    # Outlook aplica a imágenes base64 embebidas directo en el HTML).
+    CID_TOP = 'logo_casmarts_top_cid'
+    CID_BOTTOM = 'logo_casmarts_bottom_cid'
     if logo_bytes:
-        html = re.sub(r'src="https://[^"]*logo_top[^"]*"', f'src="cid:{CID}"', html)
+        html = re.sub(r'src="https://[^"]*logo_top[^"]*"', f'src="cid:{CID_TOP}"', html)
+    if logo_bottom_bytes:
+        html = re.sub(r'src="https://[^"]*logo_bottom[^"]*"', f'src="cid:{CID_BOTTOM}"', html)
 
     outer = MIMEMultipart('related')
     outer['Subject'] = subject
@@ -569,8 +550,15 @@ def _send_smtp(to_email: str, subject: str, html: str, logo_bytes: bytes, logo_m
     if logo_bytes:
         subtype = logo_mime.split('/')[-1] if '/' in logo_mime else 'png'
         img = MIMEImage(logo_bytes, _subtype=subtype)
-        img.add_header('Content-ID', f'<{CID}>')
-        img.add_header('Content-Disposition', 'inline', filename=f'logo.{subtype}')
+        img.add_header('Content-ID', f'<{CID_TOP}>')
+        img.add_header('Content-Disposition', 'inline', filename=f'logo_top.{subtype}')
+        outer.attach(img)
+
+    if logo_bottom_bytes:
+        subtype = logo_bottom_mime.split('/')[-1] if '/' in logo_bottom_mime else 'png'
+        img = MIMEImage(logo_bottom_bytes, _subtype=subtype)
+        img.add_header('Content-ID', f'<{CID_BOTTOM}>')
+        img.add_header('Content-Disposition', 'inline', filename=f'logo_bottom.{subtype}')
         outer.attach(img)
 
     ctx = ssl.create_default_context()
@@ -580,6 +568,85 @@ def _send_smtp(to_email: str, subject: str, html: str, logo_bytes: bytes, logo_m
             srv.starttls(context=ctx)
         srv.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
         srv.sendmail(settings.SMTP_FROM or settings.SMTP_USER, [to_email], outer.as_string())
+
+
+def render_event_email_html(
+    theme: TenantTheme,
+    tenant: Tenant,
+    event_type: str,
+    body_html: str,
+    subject: str,
+    logo_base64: Optional[str],
+    logo_url: Optional[str],
+    logo_bottom_base64: Optional[str],
+    logo_bottom_url: Optional[str],
+    cta_url: str,
+    tenant_name: str,
+    substitution_values: dict,
+) -> str:
+    """
+    Renderiza el wrapper Jinja de un evento + sustituye las variables {{ }}.
+    Compartido por send_test_email (datos de prueba) y por el receptor de
+    eventos reales de Authentik (datos reales del webhook) — un solo lugar
+    para la lógica de render, evita que ambos caminos se desincronicen.
+
+    `substitution_values` acepta las claves: usuario_login, usuario_email,
+    nombre_usuario, nombre_usuario_nombre, nombre_usuario_apellido,
+    ip_origen, navegador, dispositivo, fecha_evento, fecha_hora_cambio,
+    realizado_por, aplicacion_nombre, aplicacion_slug, rol_asignado, token.
+    Las que no se pasen quedan vacías o con su default razonable — mejor que
+    inventar un dato falso en un correo real.
+    """
+    env_j2 = _build_email_jinja2_env()
+    tmpl = env_j2.get_template(f'{event_type}.html.j2')
+    html = tmpl.render(
+        theme=theme,
+        body_html=body_html,
+        subject=subject,
+        logo_base64=logo_base64,
+        logo_url=logo_url,
+        logo_bottom_base64=logo_bottom_base64,
+        logo_bottom_url=logo_bottom_url,
+        event_type=event_type,
+        cta_url=cta_url,
+        tenant_name=tenant_name,
+    )
+
+    import datetime
+    current_year = datetime.datetime.now().year
+    sv = substitution_values
+    substitutions = {
+        '{{ url }}': cta_url,
+        '{{url_acceso}}': cta_url,
+        '{{ user.username }}': sv.get('usuario_login', ''),
+        '{{usuario_login}}': sv.get('usuario_login', ''),
+        '{{ user.email }}': sv.get('usuario_email', ''),
+        '{{usuario_email}}': sv.get('usuario_email', ''),
+        '{{nombre_usuario}}': sv.get('nombre_usuario', ''),
+        '{{nombre_usuario_nombre}}': sv.get('nombre_usuario_nombre', ''),
+        '{{nombre_usuario_apellido}}': sv.get('nombre_usuario_apellido', ''),
+        '{{ tenant.name }}': tenant_name,
+        '{{nombre_sistema}}': tenant_name,
+        '{{aplicacion_nombre}}': sv.get('aplicacion_nombre', 'Aplicación CaSmarts'),
+        '{{aplicacion_slug}}': sv.get('aplicacion_slug', 'default'),
+        '{{ip_origen}}': sv.get('ip_origen', 'No disponible'),
+        '{{navegador}}': sv.get('navegador', 'No disponible'),
+        '{{dispositivo}}': sv.get('dispositivo', 'No disponible'),
+        '{{ token }}': sv.get('token', ''),
+        '{{fecha_evento}}': sv.get('fecha_evento') or datetime.datetime.now().strftime('%d/%m/%Y %H:%M'),
+        '{{fecha_hora_cambio}}': sv.get('fecha_hora_cambio') or datetime.datetime.now().isoformat(),
+        '{{anio}}': str(current_year),
+        '{{empresa_nombre}}': tenant.name,
+        '{{contacto_soporte}}': 'soporte@casmarts.internal',
+        '{{realizado_por}}': sv.get('realizado_por', ''),
+        '{{footer_legal}}': 'Este mensaje es confidencial y para uso exclusivo del destinatario. Si lo recibiste por error, notifícalo y elimínalo.',
+        '{{rol_asignado}}': sv.get('rol_asignado', 'Usuario estándar'),
+        '{{color_primario}}': theme.primary_color or '#4272A5',
+        '{{logo_url}}': logo_url or '',
+    }
+    for var, val in substitutions.items():
+        html = html.replace(var, val)
+    return html
 
 
 @router.post("/{flow_slug}/emails/test", dependencies=[Depends(verify_admin_key)])
@@ -625,9 +692,12 @@ async def send_test_email(
 
     tenant_name = _strip_html_tags(theme.system_name) or theme.display_name or 'CASMARTS'
 
-    # Logo superior desde base64 del tema
+    # Logo superior: URL pública (se adjunta inline vía CID en _send_smtp) +
+    # base64 como respaldo si el render/preview no pasa por _send_smtp.
+    app_qs = f'?app={body.app_slug}' if body.app_slug else ''
     logo_bytes, logo_mime = b'', 'image/png'
     logo_base64: Optional[str] = None
+    logo_url: Optional[str] = None
     if theme.logo_top_base64:
         logo_bytes, logo_mime = _b64_to_bytes(theme.logo_top_base64)
         logo_base64 = theme.logo_top_base64
@@ -635,42 +705,34 @@ async def send_test_email(
             log.warning("Logo superior >200 KB para flow '%s' — omitido del correo de prueba.", flow_slug)
             logo_bytes = b''
             logo_base64 = None
+        else:
+            logo_url = f'{settings.PUBLIC_API_BASE_URL}/api/v1/public/theme/{flow_slug}/image/logo_top{app_qs}'
 
-    # Logo inferior
+    # Logo inferior (pie de página / "Plataforma de Administración")
+    logo_bottom_bytes, logo_bottom_mime = b'', 'image/png'
     logo_bottom_base64: Optional[str] = None
+    logo_bottom_url: Optional[str] = None
     if theme.logo_bottom_base64:
         if len(theme.logo_bottom_base64.encode()) > 200 * 1024:
             log.warning("Logo inferior >200 KB para flow '%s' — omitido del correo de prueba.", flow_slug)
         else:
+            logo_bottom_bytes, logo_bottom_mime = _b64_to_bytes(theme.logo_bottom_base64)
             logo_bottom_base64 = theme.logo_bottom_base64
+            logo_bottom_url = f'{settings.PUBLIC_API_BASE_URL}/api/v1/public/theme/{flow_slug}/image/logo_bottom{app_qs}'
 
-    # Logo URL → None cuando hay CID (se reemplaza en _send_smtp)
-    logo_url = None
-
-    # Determinar el flow correcto según el evento
+    # Determinar el flow correcto según el evento. new_account usa el mismo
+    # flow de recuperación de contraseña que password_reset: nunca se envía
+    # una contraseña por correo, solo un enlace de un solo uso para
+    # establecerla la primera vez (mandato de producto).
     flow_map = {
         'password_reset': 'password-recovery',
         'email_verification': 'default-source-enrollment',
-        'new_account': 'default-source-enrollment',
+        'new_account': 'password-recovery',
         'account_lockout': 'default-authentication-flow',
         'security_change': 'default-user-settings-flow',
     }
     cta_url_flow = flow_map.get(body.event_type, 'default-authentication-flow')
     cta_url = f'https://auth.casmart.internal/if/flow/{cta_url_flow}/'
-    env_j2 = _build_email_jinja2_env()
-    tmpl = env_j2.get_template(f'{body.event_type}.html.j2')
-    html = tmpl.render(
-        theme=theme,
-        body_html=db_body_html,
-        subject=db_subject,
-        logo_base64=logo_base64,
-        logo_url=logo_url,
-        logo_bottom_base64=logo_bottom_base64,
-        logo_bottom_url=None,
-        event_type=body.event_type,
-        cta_url=cta_url,
-        tenant_name=tenant_name,
-    )
 
     # Extraer información del contexto de la solicitud
     client_ip = request.client.host if request.client else '127.0.0.1'
@@ -692,10 +754,10 @@ async def send_test_email(
 
     device = parse_device_from_ua(user_agent)
 
-    # Datos del usuario (desde email de prueba)
+    # Datos del usuario (desde email de prueba, o el override si se dio uno)
     user_email = str(body.to_email)
     user_login = user_email.split('@')[0]
-    user_name_full = user_login.replace('.', ' ').title()  # israelm.martinez → Israelm Martinez
+    user_name_full = (body.display_name or '').strip() or user_login.replace('.', ' ').title()  # israelm.martinez → Israelm Martinez
     user_name_parts = user_name_full.split()
     user_name_first = user_name_parts[0] if len(user_name_parts) > 0 else ''
     user_name_last = ' '.join(user_name_parts[1:]) if len(user_name_parts) > 1 else ''
@@ -705,72 +767,223 @@ async def send_test_email(
     if body.app_slug:
         app_name = body.app_slug.replace('-', ' ').title()
 
-    # Año actual
-    import datetime
-    current_year = datetime.datetime.now().year
-
-    # Sustituir variables con valores de preview/contexto
-    substitutions = {
-        # URLs y acceso
-        '{{ url }}': cta_url,
-        '{{url_acceso}}': cta_url,
-
-        # Datos del usuario
-        '{{ user.username }}': user_login,
-        '{{usuario_login}}': user_login,
-        '{{ user.email }}': user_email,
-        '{{usuario_email}}': user_email,
-        '{{nombre_usuario}}': user_name_full,
-        '{{nombre_usuario_nombre}}': user_name_first,
-        '{{nombre_usuario_apellido}}': user_name_last,
-
-        # Datos del sistema
-        '{{ tenant.name }}': tenant_name,
-        '{{nombre_sistema}}': tenant_name,
-        '{{aplicacion_nombre}}': app_name,
-        '{{aplicacion_slug}}': body.app_slug or 'default',
-
-        # Contexto técnico/seguridad
-        '{{ip_origen}}': client_ip,
-        '{{navegador}}': user_agent[:80],  # Truncar si es muy largo
-        '{{dispositivo}}': device,
-
-        # Token y fechas
-        '{{ token }}': 'TOK-PREVIEW-12345',
-        '{{fecha_evento}}': datetime.datetime.now().strftime('%d/%m/%Y %H:%M'),
-        '{{fecha_hora_cambio}}': datetime.datetime.now().isoformat(),
-        '{{anio}}': str(current_year),
-
-        # Variables genéricas
-        '{{empresa_nombre}}': 'C&A Smart Systems',
-        '{{contacto_soporte}}': 'soporte@casmarts.internal',
-        '{{realizado_por}}': f'Usuario: {user_name_full}',
-        '{{footer_legal}}': 'Este mensaje es confidencial y para uso exclusivo del destinatario. Si lo recibiste por error, notifícalo y elimínalo.',
-
-        # Específicas de alta/baja/actualización (prueba)
-        '{{password_temporal}}': 'TempPass#2026!',
-        '{{rol_asignado}}': 'Usuario estándar',
-        '{{fecha_expiracion_password}}': (datetime.datetime.now() + datetime.timedelta(days=3)).strftime('%d/%m/%Y'),
-        '{{motivo_baja}}': 'Solicitud administrativa',
-        '{{fecha_efectiva}}': (datetime.datetime.now() + datetime.timedelta(days=5)).strftime('%d/%m/%Y'),
-        '{{tabla_cambios}}': '',
-        '{{color_primario}}': theme.primary_color or '#4272A5',
-        '{{logo_url}}': logo_url or '',
-    }
-
-    for var, val in substitutions.items():
-        html = html.replace(var, val)
+    html = render_event_email_html(
+        theme=theme,
+        tenant=tenant,
+        event_type=body.event_type,
+        body_html=db_body_html,
+        subject=db_subject,
+        logo_base64=logo_base64,
+        logo_url=logo_url,
+        logo_bottom_base64=logo_bottom_base64,
+        logo_bottom_url=logo_bottom_url,
+        cta_url=cta_url,
+        tenant_name=tenant_name,
+        substitution_values={
+            'usuario_login': user_login,
+            'usuario_email': user_email,
+            'nombre_usuario': user_name_full,
+            'nombre_usuario_nombre': user_name_first,
+            'nombre_usuario_apellido': user_name_last,
+            'ip_origen': client_ip,
+            'navegador': user_agent[:80],
+            'dispositivo': device,
+            'token': 'TOK-PREVIEW-12345',
+            'realizado_por': f'Usuario: {user_name_full}',
+            'aplicacion_nombre': app_name,
+            'aplicacion_slug': body.app_slug or 'default',
+        },
+    )
 
     subject_line = re.search(r'<title[^>]*>([^<]+)</title>', html, re.I)
     subject_text = f'[TEST] {subject_line.group(1).strip()}' if subject_line else f'[TEST] Correo de prueba'
 
     try:
-        _send_smtp(str(body.to_email), subject_text, html, logo_bytes, logo_mime)
+        _send_smtp(str(body.to_email), subject_text, html, logo_bytes, logo_mime, logo_bottom_bytes, logo_bottom_mime)
     except Exception as e:
         log.error("Error enviando correo de prueba: %s", e)
         raise HTTPException(status_code=502, detail=f"Error SMTP: {str(e)}")
 
     return {"status": "sent", "to": str(body.to_email), "subject": subject_text}
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Prueba REAL vía Authentik — a diferencia de /emails/test (render local +
+# SMTP directo), esto dispara el mecanismo real del evento en Authentik:
+# EmailStage real, o un evento real (user_write/password_set/login_failed)
+# que atraviesa el puente de webhooks tal como le pasaría a un usuario real.
+# ─────────────────────────────────────────────────────────────────────────
+
+_QA_TEST_USERNAME = "qa-email-test"
+_QA_TEST_EMAIL = "qa-email-test@casmarts.internal"
+
+
+class TestRealEmailRequest(BaseModel):
+    event_type: str
+    # Requerido para password_reset/email_verification (usuario existente
+    # al que se le manda el enlace real) y para account_lockout (usuario al
+    # que se le van a provocar intentos fallidos REALES). No se usa para
+    # new_account/security_change — esos usan un usuario descartable propio
+    # (qa-email-test) para no tocar una cuenta real.
+    username: Optional[str] = None
+
+
+def _authentik_headers() -> dict:
+    if not settings.AUTHENTIK_API_TOKEN or not settings.AUTHENTIK_HOST:
+        raise HTTPException(status_code=503, detail="AUTHENTIK_API_TOKEN/AUTHENTIK_HOST no configurados en .env.")
+    return {"Authorization": f"Bearer {settings.AUTHENTIK_API_TOKEN}"}
+
+
+async def _authentik_get_user_by_username(client: httpx.AsyncClient, username: str) -> Optional[dict]:
+    resp = await client.get(
+        f"{settings.AUTHENTIK_HOST}/api/v3/core/users/",
+        headers=_authentik_headers(),
+        params={"username": username},
+    )
+    resp.raise_for_status()
+    results = resp.json().get("results", [])
+    return results[0] if results else None
+
+
+async def _authentik_create_qa_test_user(client: httpx.AsyncClient) -> dict:
+    resp = await client.post(
+        f"{settings.AUTHENTIK_HOST}/api/v3/core/users/",
+        headers=_authentik_headers(),
+        json={
+            "username": _QA_TEST_USERNAME,
+            "name": "QA Email Test",
+            "email": _QA_TEST_EMAIL,
+            "is_active": True,
+            "path": "qa-testing",
+        },
+    )
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"Authentik rechazó la creación del usuario de prueba: {resp.text[:300]}")
+    return resp.json()
+
+
+async def _authentik_get_email_stage_pk(client: httpx.AsyncClient, stage_name: str) -> str:
+    resp = await client.get(f"{settings.AUTHENTIK_HOST}/api/v3/stages/email/", headers=_authentik_headers())
+    resp.raise_for_status()
+    stage = next((s for s in resp.json().get("results", []) if s.get("name") == stage_name), None)
+    if not stage:
+        raise HTTPException(status_code=502, detail=f"No se encontró el EmailStage '{stage_name}' en Authentik.")
+    return stage["pk"]
+
+
+async def _trigger_real_failed_logins(client: httpx.AsyncClient, username: str, attempts: int = 6) -> Optional[str]:
+    """
+    Provoca `attempts` intentos fallidos REALES vía el flow executor público
+    de Authentik (default-authentication-flow), para ejercitar de punta a
+    punta ReputationPolicy + casmarts-login-failed-matcher + el correo real
+    de account_lockout.
+
+    ADVERTENCIA: no se pudo verificar en vivo el protocolo exacto del flow
+    executor en la sesión donde se escribió esto (bloqueo de permisos para
+    experimentar contra la instancia real) — implementado según el patrón
+    estándar documentado de Authentik (identification+password combinados
+    en un solo POST porque default-authentication-identification tiene
+    password_stage configurado, sesión vía cookies + CSRF). Probarlo contra
+    una cuenta descartable antes de confiar en él para bloquear una cuenta
+    real; si Authentik devuelve un shape distinto, ajustar aquí.
+
+    Devuelve None si todos los intentos se enviaron sin error de transporte,
+    o un mensaje de advertencia si alguno falló.
+    """
+    flow_url = f"{settings.AUTHENTIK_HOST}/api/v3/flows/executor/default-authentication-flow/"
+    bogus_password = f"wrong-{secrets.token_urlsafe(8)}"
+    last_error: Optional[str] = None
+    for _ in range(attempts):
+        try:
+            init_resp = await client.get(flow_url, params={"query": ""})
+            init_resp.raise_for_status()
+            csrf_token = client.cookies.get("authentik_csrf") or client.cookies.get("csrftoken")
+            post_headers = {"X-CSRFToken": csrf_token} if csrf_token else {}
+            attempt_resp = await client.post(
+                flow_url,
+                headers=post_headers,
+                json={"uid_field": username, "password": bogus_password},
+            )
+            if attempt_resp.status_code >= 400:
+                last_error = attempt_resp.text[:300]
+        except httpx.HTTPError as e:
+            last_error = str(e)
+    if last_error:
+        log.warning("account_lockout real-test: al menos un intento contra el flow executor falló: %s", last_error)
+    return last_error
+
+
+@router.post("/{flow_slug}/emails/test-real", dependencies=[Depends(verify_admin_key)])
+async def send_test_email_real(
+    flow_slug: str,
+    body: TestRealEmailRequest,
+):
+    if body.event_type not in EMAIL_EVENT_TYPES:
+        raise HTTPException(status_code=422, detail=f"event_type inválido: {body.event_type}")
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        if body.event_type in ("password_reset", "email_verification"):
+            if not body.username:
+                raise HTTPException(status_code=422, detail="username es obligatorio para probar este tipo vía el flow real de Authentik.")
+            from app.routers.email_sync import _AUTHENTIK_EMAIL_STAGES
+            stage_info = _AUTHENTIK_EMAIL_STAGES.get(body.event_type)
+            if not stage_info:
+                raise HTTPException(status_code=400, detail=f"'{body.event_type}' no tiene un EmailStage real configurado.")
+            stage_name, _ = stage_info
+            user = await _authentik_get_user_by_username(client, body.username)
+            if not user:
+                raise HTTPException(status_code=404, detail=f"Usuario '{body.username}' no existe en Authentik.")
+            stage_pk = await _authentik_get_email_stage_pk(client, stage_name)
+            resp = await client.post(
+                f"{settings.AUTHENTIK_HOST}/api/v3/core/users/{user['pk']}/recovery_email/",
+                headers=_authentik_headers(),
+                json={"email_stage": stage_pk},
+            )
+            if resp.status_code >= 400:
+                raise HTTPException(status_code=502, detail=f"Authentik rechazó el envío: {resp.text[:300]}")
+            return {"status": "sent", "event_type": body.event_type, "mode": "real-authentik-flow", "to_user": body.username}
+
+        if body.event_type in ("new_account", "security_change"):
+            existing = await _authentik_get_user_by_username(client, _QA_TEST_USERNAME)
+            if body.event_type == "new_account":
+                # Recrear (borrar + crear) para forzar un user_write con
+                # created=true real — solo editar el existente no dispararía
+                # la señal que escucha casmarts-new-account-matcher.
+                if existing:
+                    del_resp = await client.delete(
+                        f"{settings.AUTHENTIK_HOST}/api/v3/core/users/{existing['pk']}/",
+                        headers=_authentik_headers(),
+                    )
+                    if del_resp.status_code >= 400 and del_resp.status_code != 404:
+                        raise HTTPException(status_code=502, detail=f"No se pudo recrear el usuario de prueba: {del_resp.text[:300]}")
+                await _authentik_create_qa_test_user(client)
+            else:
+                user = existing or await _authentik_create_qa_test_user(client)
+                set_pw_resp = await client.post(
+                    f"{settings.AUTHENTIK_HOST}/api/v3/core/users/{user['pk']}/set_password/",
+                    headers=_authentik_headers(),
+                    json={"password": secrets.token_urlsafe(24)},
+                )
+                if set_pw_resp.status_code >= 400:
+                    raise HTTPException(status_code=502, detail=f"Authentik rechazó el cambio de password: {set_pw_resp.text[:300]}")
+            return {"status": "triggered", "event_type": body.event_type, "mode": "real-authentik-event", "test_user": _QA_TEST_USERNAME}
+
+        if body.event_type == "account_lockout":
+            if not body.username:
+                raise HTTPException(status_code=422, detail="username es obligatorio: se van a provocar intentos fallidos REALES contra esa cuenta.")
+            warning = await _trigger_real_failed_logins(client, body.username, attempts=6)
+            result = {
+                "status": "triggered",
+                "event_type": body.event_type,
+                "mode": "real-authentik-event",
+                "target_user": body.username,
+                "note": "Se provocaron intentos fallidos reales — la cuenta probablemente quedó bloqueada de verdad.",
+            }
+            if warning:
+                result["warning"] = warning
+            return result
+
+        raise HTTPException(status_code=400, detail=f"'{body.event_type}' no tiene un disparador de prueba real implementado.")
 
 
 @router.get("/{flow_slug}", response_model=ThemeResponseWithEmail, dependencies=[Depends(verify_admin_key)])
@@ -1062,6 +1275,7 @@ async def resolve_tenant(
             "domain_pattern": tenant.domain_pattern,
             "primary_color": tenant.primary_color,
             "secondary_color": tenant.secondary_color,
+            "default_app_url": (tenant.config or {}).get("default_app_url"),
         }
     except Exception as e:
         log.warning(f"Error resolving tenant for '{hostname}': {e}")
@@ -1071,7 +1285,48 @@ async def resolve_tenant(
             "domain_pattern": "casmarts.local",
             "primary_color": "#4272A5",
             "secondary_color": "#2d5580",
+            "default_app_url": None,
         }
+
+
+class TenantSettingsUpdate(BaseModel):
+    default_app_url: Optional[str] = None
+
+    @field_validator('default_app_url', mode='after')
+    @classmethod
+    def validate_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == '':
+            return None
+        v = v.strip()
+        if not (v.startswith('http://') or v.startswith('https://')):
+            raise ValueError('default_app_url debe ser una URL absoluta (http:// o https://)')
+        return v
+
+
+@tenant_router.get("/settings", dependencies=[Depends(verify_admin_key)])
+async def get_tenant_settings(request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    Configuración a nivel tenant (no por tema/app) editable desde Vista
+    General del designer — hoy solo default_app_url (a dónde se manda a un
+    usuario no-admin que llega a /if/user/ sin una app específica en mente,
+    ver custom_authentik.js).
+    """
+    tenant, _ = await _get_tenant_context(request, db)
+    return {"default_app_url": (tenant.config or {}).get("default_app_url")}
+
+
+@tenant_router.patch("/settings", dependencies=[Depends(verify_admin_key)])
+async def update_tenant_settings(
+    request: Request,
+    body: TenantSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    tenant, _ = await _get_tenant_context(request, db)
+    new_config = dict(tenant.config or {})
+    new_config["default_app_url"] = body.default_app_url
+    tenant.config = new_config
+    await db.commit()
+    return {"default_app_url": tenant.config.get("default_app_url")}
 
 
 @tenant_router.get("/list")

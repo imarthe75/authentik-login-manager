@@ -9,6 +9,7 @@ from app.database import engine, Base
 from app.cache import cache
 from app.routers.admin import tenant_router
 from app.routers.email_sync import email_sync_router
+from app.routers.authentik_events import authentik_events_router
 from app.routers import admin, public
 
 logging.basicConfig(level=logging.INFO)
@@ -82,6 +83,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 app.include_router(admin.router)
 app.include_router(tenant_router)
 app.include_router(email_sync_router)
+app.include_router(authentik_events_router)
 app.include_router(public.router)
 
 @app.get("/health", status_code=status.HTTP_200_OK, tags=["Health"])

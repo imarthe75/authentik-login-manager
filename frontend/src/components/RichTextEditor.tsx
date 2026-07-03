@@ -7,6 +7,12 @@ import { Color } from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
+import { Table } from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
+import Image from '@tiptap/extension-image';
+import Mention from '@tiptap/extension-mention';
 import { Extension } from '@tiptap/core';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
@@ -14,7 +20,127 @@ import {
   List, ListOrdered, Link2, Link2Off,
   Type, Code2, Heading1, Heading2, Minus,
   RotateCcw, Highlighter, Quote, Code, Subscript, Superscript,
+  Table2, ImagePlus, Rows3, Columns3, Trash2, Undo2, Redo2,
 } from 'lucide-react';
+
+export interface EmailVariable {
+  var: string;
+  desc: string;
+}
+
+// Autocompletado de variables: al teclear "{{" se abre una lista filtrable de
+// las variables reales del catálogo (evita el typo silencioso de escribir
+// {{contaco_soporte}} a mano, que se enviaría literal sin ningún aviso).
+// Se implementa con DOM manual (sin ReactRenderer/tippy) para no sumar
+// dependencias nuevas solo por el popup de sugerencias.
+function createVariableSuggestion(variablesRef: React.MutableRefObject<EmailVariable[]>) {
+  return {
+    char: '{{',
+    allowSpaces: false,
+    items: ({ query }: { query: string }) => {
+      const q = query.toLowerCase();
+      return variablesRef.current
+        .filter((v) => v.var.toLowerCase().includes(q))
+        .slice(0, 8);
+    },
+    command: ({ editor, range, props }: any) => {
+      const id = String(props.var).replace(/[{}]/g, '');
+      editor.chain().focus().insertContentAt(range, [
+        { type: 'mention', attrs: { id } },
+        { type: 'text', text: ' ' },
+      ]).run();
+    },
+    render: () => {
+      let popup: HTMLDivElement | null = null;
+      let selectedIndex = 0;
+      let currentItems: EmailVariable[] = [];
+      let currentCommand: ((item: EmailVariable) => void) | null = null;
+
+      const renderList = () => {
+        if (!popup) return;
+        popup.innerHTML = '';
+        if (currentItems.length === 0) {
+          const empty = document.createElement('div');
+          empty.textContent = 'Sin variables que coincidan';
+          empty.style.cssText = 'padding:8px 10px;font-size:12px;color:#9ca3af;';
+          popup.appendChild(empty);
+          return;
+        }
+        currentItems.forEach((item, i) => {
+          const row = document.createElement('div');
+          row.title = item.desc;
+          row.style.cssText = `padding:6px 10px;cursor:pointer;${i === selectedIndex ? 'background:#e8f0fb;' : ''}`;
+          const varEl = document.createElement('div');
+          varEl.textContent = item.var;
+          varEl.style.cssText = 'font-family:monospace;font-size:12px;font-weight:600;color:#1d4ed8;';
+          const descEl = document.createElement('div');
+          descEl.textContent = item.desc;
+          descEl.style.cssText = 'font-size:10px;color:#6b7280;margin-top:1px;';
+          row.appendChild(varEl);
+          row.appendChild(descEl);
+          row.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            currentCommand?.(item);
+          });
+          popup!.appendChild(row);
+        });
+      };
+
+      const position = (clientRect?: (() => DOMRect | null) | null) => {
+        const rect = clientRect?.();
+        if (rect && popup) {
+          popup.style.left = `${rect.left}px`;
+          popup.style.top = `${rect.bottom + 4}px`;
+        }
+      };
+
+      return {
+        onStart: (props: any) => {
+          currentItems = props.items;
+          currentCommand = props.command;
+          selectedIndex = 0;
+          popup = document.createElement('div');
+          popup.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);max-height:240px;overflow-y:auto;min-width:220px;';
+          document.body.appendChild(popup);
+          renderList();
+          position(props.clientRect);
+        },
+        onUpdate: (props: any) => {
+          currentItems = props.items;
+          currentCommand = props.command;
+          selectedIndex = 0;
+          renderList();
+          position(props.clientRect);
+        },
+        onKeyDown: (props: any) => {
+          if (!currentItems.length) return props.event.key === 'Escape';
+          if (props.event.key === 'ArrowDown') {
+            selectedIndex = (selectedIndex + 1) % currentItems.length;
+            renderList();
+            return true;
+          }
+          if (props.event.key === 'ArrowUp') {
+            selectedIndex = (selectedIndex - 1 + currentItems.length) % currentItems.length;
+            renderList();
+            return true;
+          }
+          if (props.event.key === 'Enter' || props.event.key === 'Tab') {
+            currentCommand?.(currentItems[selectedIndex]);
+            return true;
+          }
+          if (props.event.key === 'Escape') {
+            return true;
+          }
+          return false;
+        },
+        onExit: () => {
+          popup?.remove();
+          popup = null;
+        },
+      };
+    },
+  };
+}
 
 // Custom extensions for font-family and font-size
 const FontFamily = Extension.create({
@@ -169,11 +295,61 @@ const SubscriptExtension = Extension.create({
   },
 });
 
+// Los correos de producción son HTML con estilos inline (tablas de detalle,
+// párrafos con color/tamaño puntual) — TipTap por defecto NO conserva
+// atributos que no estén declarados explícitamente en el esquema de cada
+// nodo, así que sin esto, abrir un correo por defecto en modo Diseño y
+// guardar sin tocar nada perdería silenciosamente el `style`/`width`/etc.
+// original de las tablas y bloques.
+const PreserveEmailAttrs = Extension.create({
+  name: 'preserveEmailAttrs',
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['paragraph', 'heading', 'table', 'tableRow', 'tableCell', 'tableHeader', 'image', 'bulletList', 'orderedList', 'listItem', 'blockquote'],
+        attributes: {
+          style: {
+            default: null,
+            parseHTML: (element: HTMLElement) => element.getAttribute('style') || null,
+            renderHTML: (attributes: any) => (attributes.style ? { style: attributes.style } : {}),
+          },
+        },
+      },
+      {
+        types: ['table'],
+        attributes: {
+          role: {
+            default: null,
+            parseHTML: (element: HTMLElement) => element.getAttribute('role') || null,
+            renderHTML: (attributes: any) => (attributes.role ? { role: attributes.role } : {}),
+          },
+          width: {
+            default: null,
+            parseHTML: (element: HTMLElement) => element.getAttribute('width') || null,
+            renderHTML: (attributes: any) => (attributes.width ? { width: attributes.width } : {}),
+          },
+          cellpadding: {
+            default: null,
+            parseHTML: (element: HTMLElement) => element.getAttribute('cellpadding') || null,
+            renderHTML: (attributes: any) => (attributes.cellpadding ? { cellpadding: attributes.cellpadding } : {}),
+          },
+          cellspacing: {
+            default: null,
+            parseHTML: (element: HTMLElement) => element.getAttribute('cellspacing') || null,
+            renderHTML: (attributes: any) => (attributes.cellspacing ? { cellspacing: attributes.cellspacing } : {}),
+          },
+        },
+      },
+    ];
+  },
+});
+
 interface Props {
   value: string;
   onChange: (html: string) => void;
   placeholder?: string;
   minHeight?: string;
+  variables?: EmailVariable[];
 }
 
 // ── small toolbar button ──────────────────────────────────────────────────────
@@ -205,10 +381,13 @@ const RichTextEditor: React.FC<Props> = ({
   onChange,
   placeholder = 'Escribe el contenido del correo...',
   minHeight = '180px',
+  variables = [],
 }) => {
   const [mode, setMode] = useState<'visual' | 'html'>('visual');
   const [htmlDraft, setHtmlDraft] = useState(value);
   const lastValueRef = useRef(value);
+  const variablesRef = useRef(variables);
+  useEffect(() => { variablesRef.current = variables; }, [variables]);
 
   const editor = useEditor({
     extensions: [
@@ -224,6 +403,17 @@ const RichTextEditor: React.FC<Props> = ({
       SubscriptExtension,
       Link.configure({ openOnClick: false }),
       Placeholder.configure({ placeholder }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Image.configure({ inline: false, allowBase64: true }),
+      Mention.configure({
+        suggestion: createVariableSuggestion(variablesRef),
+        renderHTML: ({ node }) => ['span', { class: 'email-var-mention' }, `{{${node.attrs.id}}}`],
+        renderText: ({ node }) => `{{${node.attrs.id}}}`,
+      }),
+      PreserveEmailAttrs,
     ],
     content: value,
     onUpdate: ({ editor }) => {
@@ -303,6 +493,18 @@ const RichTextEditor: React.FC<Props> = ({
     }
   }, [editor]);
 
+  const insertImage = useCallback(() => {
+    if (!editor) return;
+    const url = window.prompt('URL de la imagen (ej. {{logo_url}} o una URL pública)');
+    if (!url) return;
+    editor.chain().focus().setImage({ src: url }).run();
+  }, [editor]);
+
+  const insertTable = useCallback(() => {
+    if (!editor) return;
+    editor.chain().focus().insertTable({ rows: 3, cols: 2, withHeaderRow: false }).run();
+  }, [editor]);
+
   const htmlLineCount = htmlDraft.split('\n').length;
 
   return (
@@ -335,6 +537,16 @@ const RichTextEditor: React.FC<Props> = ({
 
         {mode === 'visual' && editor && (
           <>
+            <Sep />
+
+            {/* Undo / Redo */}
+            <Btn title="Deshacer (Ctrl+Z)" disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}>
+              <Undo2 className="w-3.5 h-3.5" />
+            </Btn>
+            <Btn title="Rehacer (Ctrl+Y)" disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}>
+              <Redo2 className="w-3.5 h-3.5" />
+            </Btn>
+
             <Sep />
 
             {/* Font family selector */}
@@ -447,6 +659,35 @@ const RichTextEditor: React.FC<Props> = ({
               <Btn title="Quitar enlace" onClick={() => editor.chain().focus().unsetLink().run()}>
                 <Link2Off className="w-3.5 h-3.5" />
               </Btn>
+            )}
+
+            <Sep />
+
+            {/* Table & Image */}
+            <Btn title="Insertar tabla" active={editor.isActive('table')} onClick={insertTable}>
+              <Table2 className="w-3.5 h-3.5" />
+            </Btn>
+            <Btn title="Insertar imagen (URL)" onClick={insertImage}>
+              <ImagePlus className="w-3.5 h-3.5" />
+            </Btn>
+            {editor.isActive('table') && (
+              <>
+                <Btn title="Agregar fila" onClick={() => editor.chain().focus().addRowAfter().run()}>
+                  <Rows3 className="w-3.5 h-3.5" />
+                </Btn>
+                <Btn title="Agregar columna" onClick={() => editor.chain().focus().addColumnAfter().run()}>
+                  <Columns3 className="w-3.5 h-3.5" />
+                </Btn>
+                <Btn title="Eliminar fila" onClick={() => editor.chain().focus().deleteRow().run()}>
+                  <Rows3 className="w-3.5 h-3.5 opacity-50" />
+                </Btn>
+                <Btn title="Eliminar columna" onClick={() => editor.chain().focus().deleteColumn().run()}>
+                  <Columns3 className="w-3.5 h-3.5 opacity-50" />
+                </Btn>
+                <Btn title="Eliminar tabla" onClick={() => editor.chain().focus().deleteTable().run()}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Btn>
+              </>
             )}
 
             <Sep />
@@ -569,6 +810,49 @@ const RichTextEditor: React.FC<Props> = ({
           float: left;
           height: 0;
           pointer-events: none;
+        }
+        .tiptap img, .ProseMirror img { max-width: 100%; height: auto; }
+        .tiptap img.ProseMirror-selectednode, .ProseMirror img.ProseMirror-selectednode {
+          outline: 2px solid #4272A5;
+        }
+        .tiptap table, .ProseMirror table {
+          border-collapse: collapse;
+          table-layout: fixed;
+          width: 100%;
+          margin: 0.5rem 0;
+          overflow: hidden;
+        }
+        .tiptap td, .tiptap th, .ProseMirror td, .ProseMirror th {
+          border: 1px solid #e5e5ea;
+          padding: 8px 10px;
+          vertical-align: top;
+          position: relative;
+        }
+        .tiptap th, .ProseMirror th {
+          background-color: #f5f5f7;
+          font-weight: 600;
+          text-align: left;
+        }
+        .tiptap .selectedCell, .ProseMirror .selectedCell {
+          background-color: rgba(66, 114, 165, 0.12);
+        }
+        .tiptap .column-resize-handle, .ProseMirror .column-resize-handle {
+          background-color: #4272A5;
+          bottom: -2px;
+          position: absolute;
+          right: -2px;
+          top: 0;
+          width: 3px;
+          pointer-events: none;
+        }
+        .tiptap .email-var-mention, .ProseMirror .email-var-mention {
+          background-color: #eff6ff;
+          color: #1d4ed8;
+          border: 1px solid #bfdbfe;
+          border-radius: 4px;
+          padding: 0 3px;
+          font-family: monospace;
+          font-size: 0.85em;
         }
       `}</style>
     </div>
