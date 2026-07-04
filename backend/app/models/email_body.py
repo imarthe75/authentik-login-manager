@@ -5,7 +5,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 EMAIL_EVENT_TYPES = frozenset(
-    ['password_reset', 'new_account', 'account_lockout', 'email_verification', 'security_change']
+    ['password_reset', 'new_account', 'account_lockout', 'email_verification', 'security_change',
+     'account_locked_admin', 'account_unlocked_admin',
+     'login_success', 'suspicious_request', 'invitation_used', 'app_authorized',
+     'impersonation_started', 'account_deleted']
 )
 
 
@@ -15,7 +18,10 @@ class TenantEmailBody(Base):
         UniqueConstraint('tenant_id', 'flow_slug', 'event_type', name='uq_email_bodies_tenant_flow_event'),
         CheckConstraint(
             "event_type IN ('password_reset','new_account','account_lockout',"
-            "'email_verification','security_change')",
+            "'email_verification','security_change','account_locked_admin',"
+            "'account_unlocked_admin','login_success','suspicious_request',"
+            "'invitation_used','app_authorized','impersonation_started',"
+            "'account_deleted')",
             name='ck_email_bodies_event_type'
         ),
     )

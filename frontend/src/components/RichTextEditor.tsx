@@ -454,14 +454,19 @@ const RichTextEditor: React.FC<Props> = ({
     onChange(v);
   };
 
+  // Solo para el modo HTML (textarea plano, sin ProseMirror detrás). En modo
+  // visual NO se maneja aquí a propósito: ProseMirror ya trae su propio
+  // handler nativo de drop (editHandlers.drop en prosemirror-view/input.ts)
+  // que inserta el texto exactamente en el punto donde se soltó — duplicar
+  // esa inserción aquí (como hacía antes) dejaba la variable pegada dos
+  // veces, porque ProseMirror no detiene la propagación del evento.
   const handleDrop = (e: React.DragEvent) => {
+    if (mode !== 'html') return;
     e.preventDefault();
     e.stopPropagation();
 
     const variable = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('application/x-email-variable');
-    if (variable && editor && mode === 'visual') {
-      editor.chain().focus().insertContent(variable).run();
-    } else if (variable && mode === 'html') {
+    if (variable) {
       const textarea = e.currentTarget.querySelector('textarea') as HTMLTextAreaElement;
       if (textarea) {
         const start = textarea.selectionStart;
@@ -769,8 +774,6 @@ const RichTextEditor: React.FC<Props> = ({
           className="px-3 py-2 text-sm transition-colors hover:bg-gray-50"
           style={{ minHeight, maxHeight: '340px', overflowY: 'auto' }}
           onClick={() => editor?.commands.focus()}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
         >
           <EditorContent editor={editor} className="outline-none" />
         </div>

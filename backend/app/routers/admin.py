@@ -47,24 +47,42 @@ ADMIN_KEY_RATE_WINDOW = 300     # por ventana de 5 minutos, por IP
 
 
 async def verify_admin_key(request: Request, x_admin_key: str = Header(..., alias="X-Admin-Key")):
+    # Todo el tráfico pasa por casmarts-core-gateway, así que
+    # request.client.host es SIEMPRE la IP interna del gateway (no la del
+    # navegador real) — el rate limit terminaba compartiendo un solo balde
+    # entre TODOS los usuarios del panel admin. El gateway sí reenvía
+    # X-Real-IP con la IP real (ver subdomains.conf); solo se confía en ese
+    # header si la conexión inmediata viene del gateway (mismo check que
+    # _is_trusted_proxy_peer usa para X-Tenant-Domain).
     client_ip = request.client.host if request.client else "unknown"
-    rate_key = f"ratelimit:admin_key:{client_ip}"
+    if _is_trusted_proxy_peer(request):
+        client_ip = request.headers.get("X-Real-IP", client_ip)
 
+    # Comparación constant-time: evita filtrar la clave por diferencias de tiempo.
+    if secrets.compare_digest(x_admin_key, settings.ADMIN_API_KEY):
+        return  # clave correcta: no consume el cupo de fuerza bruta
+
+    # Solo los INTENTOS FALLIDOS cuentan para el límite — este check existe
+    # para frenar fuerza bruta contra ADMIN_API_KEY, no para limitar el uso
+    # normal de un admin ya autenticado. Antes se incrementaba en cada
+    # request (éxito o no): con StrictMode de React duplicando cada fetch en
+    # dev y el editor de correos disparando 2 requests por cada cambio de
+    # pestaña de evento, un solo admin agotaba el cupo de 20/5min con uso
+    # legítimo normal (visto en vivo 2026-07-03).
+    rate_key = f"ratelimit:admin_key:{client_ip}"
     attempts = await cache.incr_with_ttl(rate_key, ADMIN_KEY_RATE_WINDOW)
     if attempts is not None and attempts > ADMIN_KEY_RATE_LIMIT:
-        log.warning("Rate limit exceeded for X-Admin-Key from IP %s (%s attempts)", client_ip, attempts)
+        log.warning("Rate limit exceeded for X-Admin-Key from IP %s (%s attempts fallidos)", client_ip, attempts)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many authentication attempts. Try again later."
         )
 
-    # Comparación constant-time: evita filtrar la clave por diferencias de tiempo.
-    if not secrets.compare_digest(x_admin_key, settings.ADMIN_API_KEY):
-        log.warning("Invalid X-Admin-Key attempt from IP %s", client_ip)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid administrative credentials."
-        )
+    log.warning("Invalid X-Admin-Key attempt from IP %s", client_ip)
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid administrative credentials."
+    )
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
@@ -383,6 +401,14 @@ async def preview_email(
         'new_account': 'password-recovery',
         'account_lockout': 'default-authentication-flow',
         'security_change': 'default-user-settings-flow',
+        'account_locked_admin': 'default-authentication-flow',
+        'account_unlocked_admin': 'default-authentication-flow',
+        'login_success': 'default-authentication-flow',
+        'suspicious_request': 'default-authentication-flow',
+        'invitation_used': 'default-authentication-flow',
+        'app_authorized': 'default-authentication-flow',
+        'impersonation_started': 'default-user-settings-flow',
+        'account_deleted': 'default-authentication-flow',
     }
     flow_slug = flow_map.get(event_type, 'default-authentication-flow')
     cta_url = f'https://auth.casmart.internal/if/flow/{flow_slug}/'
@@ -570,6 +596,24 @@ def _send_smtp(
         srv.sendmail(settings.SMTP_FROM or settings.SMTP_USER, [to_email], outer.as_string())
 
 
+def _format_link_expiry_text(minutes: int) -> str:
+    """Texto legible para el enlace de un solo uso (password_reset/new_account),
+    a partir de password_policies.link_expiry_minutes — evita que el correo
+    diga un valor fijo ("1 hora") que se desincronice del token_expiry real
+    configurado en Authentik (ver password_policy.py:_push_to_authentik)."""
+    if minutes % 60 == 0:
+        hours = minutes // 60
+        return f"{hours} hora" + ("s" if hours != 1 else "")
+    return f"{minutes} minuto" + ("s" if minutes != 1 else "")
+
+
+async def _get_link_expiry_minutes(db: AsyncSession) -> int:
+    from app.models.password_policy import PasswordPolicy, SINGLETON_ID
+    result = await db.execute(select(PasswordPolicy).where(PasswordPolicy.id == SINGLETON_ID))
+    policy = result.scalar_one_or_none()
+    return policy.link_expiry_minutes if policy else 60
+
+
 def render_event_email_html(
     theme: TenantTheme,
     tenant: Tenant,
@@ -643,6 +687,7 @@ def render_event_email_html(
         '{{rol_asignado}}': sv.get('rol_asignado', 'Usuario estándar'),
         '{{color_primario}}': theme.primary_color or '#4272A5',
         '{{logo_url}}': logo_url or '',
+        '{{enlace_expiracion_texto}}': sv.get('enlace_expiracion_texto') or _format_link_expiry_text(60),
     }
     for var, val in substitutions.items():
         html = html.replace(var, val)
@@ -730,6 +775,14 @@ async def send_test_email(
         'new_account': 'password-recovery',
         'account_lockout': 'default-authentication-flow',
         'security_change': 'default-user-settings-flow',
+        'account_locked_admin': 'default-authentication-flow',
+        'account_unlocked_admin': 'default-authentication-flow',
+        'login_success': 'default-authentication-flow',
+        'suspicious_request': 'default-authentication-flow',
+        'invitation_used': 'default-authentication-flow',
+        'app_authorized': 'default-authentication-flow',
+        'impersonation_started': 'default-user-settings-flow',
+        'account_deleted': 'default-authentication-flow',
     }
     cta_url_flow = flow_map.get(body.event_type, 'default-authentication-flow')
     cta_url = f'https://auth.casmart.internal/if/flow/{cta_url_flow}/'
@@ -767,6 +820,8 @@ async def send_test_email(
     if body.app_slug:
         app_name = body.app_slug.replace('-', ' ').title()
 
+    link_expiry_minutes = await _get_link_expiry_minutes(db)
+
     html = render_event_email_html(
         theme=theme,
         tenant=tenant,
@@ -792,6 +847,7 @@ async def send_test_email(
             'realizado_por': f'Usuario: {user_name_full}',
             'aplicacion_nombre': app_name,
             'aplicacion_slug': body.app_slug or 'default',
+            'enlace_expiracion_texto': _format_link_expiry_text(link_expiry_minutes),
         },
     )
 
@@ -917,6 +973,7 @@ async def _trigger_real_failed_logins(client: httpx.AsyncClient, username: str, 
 async def send_test_email_real(
     flow_slug: str,
     body: TestRealEmailRequest,
+    db: AsyncSession = Depends(get_db),
 ):
     if body.event_type not in EMAIL_EVENT_TYPES:
         raise HTTPException(status_code=422, detail=f"event_type inválido: {body.event_type}")
@@ -934,10 +991,18 @@ async def send_test_email_real(
             if not user:
                 raise HTTPException(status_code=404, detail=f"Usuario '{body.username}' no existe en Authentik.")
             stage_pk = await _authentik_get_email_stage_pk(client, stage_name)
+            # recovery_email() de Authentik NO hereda EmailStage.token_expiry si
+            # no se manda token_duration explícito — cae al default global del
+            # tenant de Authentik (visto en vivo: minutes=30, no los 60 guardados
+            # en Política de Contraseña, causando que el correo real mostrara
+            # "expira 29 minutos" con la política guardando 60). El flujo real
+            # de recuperación (stage.py) sí usa EmailStage.token_expiry
+            # directamente porque no pasa por este endpoint de administración.
+            link_expiry_minutes = await _get_link_expiry_minutes(db)
             resp = await client.post(
                 f"{settings.AUTHENTIK_HOST}/api/v3/core/users/{user['pk']}/recovery_email/",
                 headers=_authentik_headers(),
-                json={"email_stage": stage_pk},
+                json={"email_stage": stage_pk, "token_duration": f"minutes={link_expiry_minutes}"},
             )
             if resp.status_code >= 400:
                 raise HTTPException(status_code=502, detail=f"Authentik rechazó el envío: {resp.text[:300]}")
@@ -966,6 +1031,28 @@ async def send_test_email_real(
                 )
                 if set_pw_resp.status_code >= 400:
                     raise HTTPException(status_code=502, detail=f"Authentik rechazó el cambio de password: {set_pw_resp.text[:300]}")
+            return {"status": "triggered", "event_type": body.event_type, "mode": "real-authentik-event", "test_user": _QA_TEST_USERNAME}
+
+        if body.event_type in ("account_locked_admin", "account_unlocked_admin"):
+            user = await _authentik_get_user_by_username(client, _QA_TEST_USERNAME) or await _authentik_create_qa_test_user(client)
+            target_active = body.event_type == "account_unlocked_admin"
+            # Se pre-siembra el estado ANTERIOR (el opuesto) en Valkey antes
+            # del PATCH — si no, la primera vez que se prueba este tipo de
+            # evento, el webhook vería is_active sin un valor previo en
+            # cache y solo fijaría la base sin avisar (ver
+            # _resolve_admin_toggle_event en authentik_events.py).
+            await cache.set(
+                f"user_active_state:{user['pk']}",
+                "0" if target_active else "1",
+                ex=315360000,
+            )
+            patch_resp = await client.patch(
+                f"{settings.AUTHENTIK_HOST}/api/v3/core/users/{user['pk']}/",
+                headers=_authentik_headers(),
+                json={"is_active": target_active},
+            )
+            if patch_resp.status_code >= 400:
+                raise HTTPException(status_code=502, detail=f"Authentik rechazó el cambio de estado: {patch_resp.text[:300]}")
             return {"status": "triggered", "event_type": body.event_type, "mode": "real-authentik-event", "test_user": _QA_TEST_USERNAME}
 
         if body.event_type == "account_lockout":

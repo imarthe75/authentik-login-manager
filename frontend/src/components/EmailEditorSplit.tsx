@@ -69,6 +69,46 @@ const EMAIL_EVENT_META: Record<string, { icon: string; desc: string; badgeClass:
     desc: 'Confirmación de dirección de correo electrónico',
     badgeClass: 'bg-blue-100 text-blue-700 border-blue-200',
   },
+  account_locked_admin: {
+    icon: '🚫',
+    desc: 'Cuenta bloqueada directamente por un administrador (no por intentos fallidos)',
+    badgeClass: 'bg-red-100 text-red-700 border-red-200',
+  },
+  account_unlocked_admin: {
+    icon: '🔓',
+    desc: 'Cuenta reactivada directamente por un administrador',
+    badgeClass: 'bg-green-100 text-green-700 border-green-200',
+  },
+  login_success: {
+    icon: '👋',
+    desc: 'Aviso de un inicio de sesión exitoso',
+    badgeClass: 'bg-green-100 text-green-700 border-green-200',
+  },
+  suspicious_request: {
+    icon: '⚠️',
+    desc: 'Alerta por una solicitud sospechosa detectada',
+    badgeClass: 'bg-red-100 text-red-700 border-red-200',
+  },
+  invitation_used: {
+    icon: '🎟️',
+    desc: 'Bienvenida al aceptar una invitación',
+    badgeClass: 'bg-green-100 text-green-700 border-green-200',
+  },
+  app_authorized: {
+    icon: '🔗',
+    desc: 'Aviso de que se autorizó el acceso de una nueva aplicación (consentimiento OAuth)',
+    badgeClass: 'bg-blue-100 text-blue-700 border-blue-200',
+  },
+  impersonation_started: {
+    icon: '🕵️',
+    desc: 'Aviso de que un administrador accedió a la cuenta (impersonación)',
+    badgeClass: 'bg-orange-100 text-orange-700 border-orange-200',
+  },
+  account_deleted: {
+    icon: '🗑️',
+    desc: 'Confirmación de que la cuenta fue eliminada',
+    badgeClass: 'bg-gray-100 text-gray-700 border-gray-200',
+  },
 };
 
 const DEFAULT_VARIABLES = [
@@ -127,6 +167,7 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
   const [liveHtml, setLiveHtml] = useState('');
   const [showVariables, setShowVariables] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [isDraggingVar, setIsDraggingVar] = useState(false);
   const liveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const toggleVariables = () => setShowVariables((prev) => {
@@ -279,6 +320,7 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
   const handleDragStart = (e: React.DragEvent, variable: string) => {
     e.dataTransfer.effectAllowed = 'copy';
     e.dataTransfer.setData('text/plain', variable);
+    setIsDraggingVar(true);
   };
 
   const handleShowFullPreview = () => {
@@ -464,10 +506,14 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
         </div>
       </div>
 
-      {/* Backdrop: cierra el drawer abierto al hacer clic fuera */}
+      {/* Backdrop: cierra el drawer abierto al hacer clic fuera. Mientras se
+          arrastra una variable, se vuelve pointer-events-none — si no, este
+          div (z-20, cubre ambos paneles) intercepta el drop antes de que
+          llegue al editor de abajo y el navegador lo rechaza en silencio
+          (no hay handler de dragover/drop aquí que haga preventDefault). */}
       {(showVariables || showTemplates) && (
         <div
-          className="absolute inset-0 bg-black/10 z-20"
+          className={`absolute inset-0 bg-black/10 z-20 ${isDraggingVar ? 'pointer-events-none' : ''}`}
           onClick={closeDrawers}
         />
       )}
@@ -589,6 +635,7 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
                 key={item.var}
                 draggable
                 onDragStart={(e) => handleDragStart(e, item.var)}
+                onDragEnd={() => setIsDraggingVar(false)}
                 onClick={() => handleCopyVar(item.var)}
                 className={`p-2.5 rounded-lg border cursor-grab active:cursor-grabbing transition-all group ${
                   copiedVar === item.var

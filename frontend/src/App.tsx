@@ -4,6 +4,7 @@ import { ThemeSelector } from './components/ThemeSelector';
 import { LoginPreview } from './components/LoginPreview';
 import { EmailEditorSplit } from './components/EmailEditorSplit';
 import { ConfigPanel } from './components/ConfigPanel';
+import { PasswordPolicyPanel } from './components/PasswordPolicyPanel';
 import { themesApi } from './api/themesApi';
 import { Theme } from './types/theme';
 import { TenantProvider, useTenant } from './contexts/TenantContext';
@@ -30,7 +31,7 @@ const AppContent: React.FC = () => {
   const [themesList, setThemesList] = useState<Theme[]>([]);
   const [authentikApps, setAuthentikApps] = useState<{ slug: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [previewMode, setPreviewMode] = useState<'login' | 'email'>('login');
+  const [previewMode, setPreviewMode] = useState<'login' | 'email' | 'password_policy'>('login');
   const [activeEmailEvent, setActiveEmailEvent] = useState<string>('password_reset');
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
 
@@ -259,63 +260,77 @@ const AppContent: React.FC = () => {
           </div>
         )}
 
-        {/* Left Column Preview (~60%) — sin tenant seleccionado, no muestra nada */}
+        {/* Left Column Preview (~60%) — sin tenant seleccionado, no muestra login/correo,
+            pero Política de Contraseña SÍ es alcanzable (es global, no depende de tenant) */}
         <section className="flex-1 h-full relative bg-gray-800 flex flex-col">
-          {selectedTenantId ? (
-            <>
-              {/* Preview Mode Toggle */}
-              <div className="flex gap-0 bg-gray-900 border-b border-gray-700 shrink-0">
-                <button
-                  onClick={() => setPreviewMode('login')}
-                  className={`flex-1 py-3 px-4 text-sm font-semibold transition-all border-b-2 ${
-                    previewMode === 'login'
-                      ? 'border-blue-500 text-blue-400 bg-gray-800'
-                      : 'border-transparent text-gray-400 hover:text-gray-300'
-                  }`}
-                >
-                  🔐 Vista Login
-                </button>
-                <button
-                  onClick={() => setPreviewMode('email')}
-                  className={`flex-1 py-3 px-4 text-sm font-semibold transition-all border-b-2 ${
-                    previewMode === 'email'
-                      ? 'border-blue-500 text-blue-400 bg-gray-800'
-                      : 'border-transparent text-gray-400 hover:text-gray-300'
-                  }`}
-                >
-                  📧 Vista Correo
-                </button>
-              </div>
+          {/* Preview Mode Toggle */}
+          <div className="flex gap-0 bg-gray-900 border-b border-gray-700 shrink-0">
+            <button
+              onClick={() => setPreviewMode('login')}
+              className={`flex-1 py-3 px-4 text-sm font-semibold transition-all border-b-2 ${
+                previewMode === 'login'
+                  ? 'border-blue-500 text-blue-400 bg-gray-800'
+                  : 'border-transparent text-gray-400 hover:text-gray-300'
+              }`}
+            >
+              🔐 Vista Login
+            </button>
+            <button
+              onClick={() => setPreviewMode('email')}
+              className={`flex-1 py-3 px-4 text-sm font-semibold transition-all border-b-2 ${
+                previewMode === 'email'
+                  ? 'border-blue-500 text-blue-400 bg-gray-800'
+                  : 'border-transparent text-gray-400 hover:text-gray-300'
+              }`}
+            >
+              📧 Vista Correo
+            </button>
+            <button
+              onClick={() => setPreviewMode('password_policy')}
+              className={`flex-1 py-3 px-4 text-sm font-semibold transition-all border-b-2 ${
+                previewMode === 'password_policy'
+                  ? 'border-blue-500 text-blue-400 bg-gray-800'
+                  : 'border-transparent text-gray-400 hover:text-gray-300'
+              }`}
+            >
+              🔒 Política de Contraseña
+            </button>
+          </div>
 
-              {/* Preview Content */}
-              <div className="flex-1 overflow-hidden">
-                {previewMode === 'login' && <LoginPreview theme={theme} />}
-                {previewMode === 'email' && (
-                  <EmailEditorSplit
-                    theme={theme}
-                    activeEventType={activeEmailEvent}
-                    onUpdateEmailBody={updateEmailBody}
-                    onSelectEvent={setActiveEmailEvent}
-                  />
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-center p-8">
-              <div>
-                <div className="text-5xl mb-4">🏢</div>
-                <h2 className="text-white text-lg font-semibold mb-2">Selecciona un tenant para comenzar</h2>
-                <p className="text-gray-400 text-sm max-w-sm">
-                  Elige un tenant en el panel de configuración para ver y editar su portal de login y sus plantillas de correo.
-                </p>
-              </div>
-            </div>
-          )}
+          {/* Preview Content */}
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {previewMode === 'password_policy' && <PasswordPolicyPanel />}
+            {previewMode !== 'password_policy' && (
+              selectedTenantId ? (
+                <>
+                  {previewMode === 'login' && <LoginPreview theme={theme} />}
+                  {previewMode === 'email' && (
+                    <EmailEditorSplit
+                      theme={theme}
+                      activeEventType={activeEmailEvent}
+                      onUpdateEmailBody={updateEmailBody}
+                      onSelectEvent={setActiveEmailEvent}
+                    />
+                  )}
+                </>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-center p-8">
+                  <div>
+                    <div className="text-5xl mb-4">🏢</div>
+                    <h2 className="text-white text-lg font-semibold mb-2">Selecciona un tenant para comenzar</h2>
+                    <p className="text-gray-400 text-sm max-w-sm">
+                      Elige un tenant en el panel de configuración para ver y editar su portal de login y sus plantillas de correo.
+                    </p>
+                  </div>
+                </div>
+              )
+            )}
+          </div>
         </section>
 
-        {/* Right Column Customizer Drawer Panel (~40%) - Hidden in email edit mode.
+        {/* Right Column Customizer Drawer Panel (~40%) - Hidden in email edit mode y en Política de Contraseña (es global, sin panel de tema).
             Se fuerza visible sin tenant seleccionado, para que el selector siga alcanzable. */}
-        {(previewMode === 'login' || !selectedTenantId) && (
+        {previewMode !== 'password_policy' && (previewMode === 'login' || !selectedTenantId) && (
           <section className="w-[380px] shrink-0 h-full">
             <ConfigPanel
             theme={theme}

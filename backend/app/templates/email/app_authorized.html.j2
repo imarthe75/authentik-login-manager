@@ -1,0 +1,30 @@
+[% set subject = subject or 'Nueva aplicación autorizada en tu cuenta' %]
+[% set badge_text = 'Aplicación autorizada' %]
+[% set badge_color = '#4272A5' %]
+[% set cta_text = 'Revisar mi cuenta' %]
+[% set security_note = '¿No reconoces esta autorización? Contacta de inmediato a <a href="mailto:{{contacto_soporte}}" style="color:#4272A5;">{{contacto_soporte}}</a>.' %]
+[% set security_note_bg = '#eef4fb' %]
+[% set security_note_color = '#4272A5' %]
+[% if not body_html %]
+[% set body_html %]
+<h1 style="font-size:20px;margin:0 0 8px 0;color:#1d1d1f;">Hola {{nombre_usuario}},</h1>
+<p style="font-size:14px;line-height:1.6;margin:0;color:#3c3c43;">
+  Autorizaste el acceso de <strong>{{aplicacion_nombre}}</strong> a tu cuenta en <strong>[[ tenant_name ]]</strong>.
+</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e5ea;border-radius:6px;margin-top:20px;">
+  <tr>
+    <td style="padding:10px 14px;font-size:13px;color:#6e6e73;width:42%;border-bottom:1px solid #e5e5ea;">Aplicación</td>
+    <td style="padding:10px 14px;font-size:13px;color:#1d1d1f;border-bottom:1px solid #e5e5ea;">{{aplicacion_nombre}}</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 14px;font-size:13px;color:#6e6e73;border-bottom:1px solid #e5e5ea;">Usuario / login</td>
+    <td style="padding:10px 14px;font-size:13px;color:#1d1d1f;border-bottom:1px solid #e5e5ea;">{{usuario_login}}</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 14px;font-size:13px;color:#6e6e73;">Fecha y hora</td>
+    <td style="padding:10px 14px;font-size:13px;color:#1d1d1f;">{{fecha_evento}}</td>
+  </tr>
+</table>
+[% endset %]
+[% endif %]
+[%- include "email_base_unified.html.j2" %]

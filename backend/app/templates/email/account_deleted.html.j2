@@ -1,0 +1,32 @@
+[% set subject = subject or 'Tu cuenta fue eliminada' %]
+[% set badge_text = 'Cuenta eliminada' %]
+[% set badge_color = '#6e6e73' %]
+[% set cta_text = None %]
+[% set cta_url = None %]
+[% set security_note = '¿No esperabas este cambio? Contacta de inmediato a <a href="mailto:{{contacto_soporte}}" style="color:#6e6e73;">{{contacto_soporte}}</a>.' %]
+[% set security_note_bg = '#f2f2f2' %]
+[% set security_note_color = '#6e6e73' %]
+[% if not body_html %]
+[% set body_html %]
+<h1 style="font-size:20px;margin:0 0 8px 0;color:#1d1d1f;">Hola {{nombre_usuario}},</h1>
+<p style="font-size:14px;line-height:1.6;margin:0;color:#3c3c43;">
+  Tu cuenta en <strong>[[ tenant_name ]]</strong> fue eliminada. A partir de ahora ya no podrás iniciar sesión
+  con ella.
+</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e5ea;border-radius:6px;margin-top:20px;">
+  <tr>
+    <td style="padding:10px 14px;font-size:13px;color:#6e6e73;width:42%;border-bottom:1px solid #e5e5ea;">Sistema</td>
+    <td style="padding:10px 14px;font-size:13px;color:#1d1d1f;border-bottom:1px solid #e5e5ea;">[[ tenant_name ]]</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 14px;font-size:13px;color:#6e6e73;border-bottom:1px solid #e5e5ea;">Usuario / login</td>
+    <td style="padding:10px 14px;font-size:13px;color:#1d1d1f;border-bottom:1px solid #e5e5ea;">{{usuario_login}}</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 14px;font-size:13px;color:#6e6e73;">Fecha y hora</td>
+    <td style="padding:10px 14px;font-size:13px;color:#1d1d1f;">{{fecha_evento}}</td>
+  </tr>
+</table>
+[% endset %]
+[% endif %]
+[%- include "email_base_unified.html.j2" %]

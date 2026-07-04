@@ -29,8 +29,8 @@ email_sync_router = APIRouter(
 # otros 3 tipos de correo (new_account, account_lockout, security_change) no
 # tienen EmailStage propio — se resuelven vía el puente de eventos/webhook.
 _AUTHENTIK_EMAIL_STAGES: dict[str, tuple[str, str]] = {
-    "password_reset": ("casmarts-smtp-gmail", "email/casmarts_password_reset.html"),
-    "email_verification": ("casmarts-enrollment-verification", "email/casmarts_email_verification.html"),
+    "password_reset": ("casmarts-smtp-gmail", "email/password_reset.html"),
+    "email_verification": ("casmarts-enrollment-verification", "email/email_verification.html"),
 }
 
 # Placeholders únicos usados durante el render de dos pasadas (Jinja + nuestra
@@ -116,11 +116,13 @@ def _render_password_reset_for_authentik(theme: TenantTheme, tenant: Tenant) -> 
         html,
     )
 
-    # El texto de preview decía "24 horas" (valor fijo de ejemplo) — el
-    # EmailStage real de Authentik define su propia vigencia de token (hoy 30
-    # min), así que se reemplaza por el valor dinámico real de cada envío.
+    # El template fuente usa {{enlace_expiracion_texto}} (para el preview y
+    # el correo new_account, que sí leen password_policies.link_expiry_minutes
+    # vía render_event_email_html) — pero el EmailStage real de Authentik
+    # calcula su propia vigencia por token en {{ expires }}, más precisa que
+    # cualquier valor fijo (nunca se desincroniza del token_expiry real).
     html = html.replace(
-        "Este enlace es válido por 24 horas a partir del momento en que se generó.",
+        "Este enlace es válido por {{enlace_expiracion_texto}} a partir del momento en que se generó.",
         "Este enlace expira {{ expires|naturaltime }}.",
     )
 

@@ -395,7 +395,37 @@ var CUSTOM_TRANSLATIONS = [[ custom_messages_json or '{}' ]];
 var TRANSLATIONS = Object.assign({
     "enter the email address or username associated with your account.": "Introduzca la dirección de correo electrónico o nombre de usuario asociado con su cuenta.",
     "password recovery": "Recuperación de contraseña",
-    "enter your username or email address.": "Introduzca su nombre de usuario o correo electrónico."
+    "enter your username or email address.": "Introduzca su nombre de usuario o correo electrónico.",
+    // Feedback de zxcvbn (biblioteca de fortaleza de contraseñas) — vocabulario
+    // fijo y conocido de la librería, no viene del catálogo i18n de Authentik
+    // (por eso llegaba sin traducir pese a que el resto del stage sí se traduce).
+    "straight rows of keys are easy to guess": "Las filas rectas del teclado son fáciles de adivinar",
+    "short keyboard patterns are easy to guess": "Los patrones cortos de teclado son fáciles de adivinar",
+    "repeats like \"aaa\" are easy to guess": "Las repeticiones como \"aaa\" son fáciles de adivinar",
+    "repeats like \"abcabcabc\" are only slightly harder to guess than \"abc\"": "Las repeticiones como \"abcabcabc\" son solo un poco más difíciles de adivinar que \"abc\"",
+    "sequences like \"abc\" or \"6543\" are easy to guess": "Las secuencias como \"abc\" o \"6543\" son fáciles de adivinar",
+    "recent years are easy to guess": "Los años recientes son fáciles de adivinar",
+    "dates are often easy to guess": "Las fechas suelen ser fáciles de adivinar",
+    "this is a top-10 common password": "Es una de las 10 contraseñas más comunes",
+    "this is a top-100 common password": "Es una de las 100 contraseñas más comunes",
+    "this is a very common password": "Es una contraseña muy común",
+    "this is similar to a commonly used password": "Es similar a una contraseña de uso común",
+    "a word by itself is easy to guess": "Una sola palabra es fácil de adivinar",
+    "names and surnames by themselves are easy to guess": "Los nombres y apellidos por sí solos son fáciles de adivinar",
+    "common names and surnames are easy to guess": "Los nombres y apellidos comunes son fáciles de adivinar",
+    "use a few words, avoid common phrases": "Usa varias palabras, evita frases comunes",
+    "no need for symbols, digits, or uppercase letters": "No es necesario usar símbolos, números o mayúsculas",
+    "add another word or two. uncommon words are better.": "Agrega una o dos palabras más. Las palabras poco comunes son mejores.",
+    "use a longer keyboard pattern with more turns": "Usa un patrón de teclado más largo y con más cambios de dirección",
+    "avoid repeated words and characters": "Evita palabras y caracteres repetidos",
+    "avoid sequences": "Evita secuencias",
+    "avoid recent years": "Evita años recientes",
+    "avoid years that are associated with you": "Evita años asociados a ti",
+    "avoid dates and years that are associated with you": "Evita fechas y años asociados a ti",
+    "capitalization doesn't help very much": "Usar mayúsculas no ayuda mucho",
+    "all-uppercase is almost as easy to guess as all-lowercase": "Todo en mayúsculas es casi tan fácil de adivinar como todo en minúsculas",
+    "reversed words aren't much harder to guess": "Las palabras escritas al revés no son mucho más difíciles de adivinar",
+    "predictable substitutions like '@' instead of 'a' don't help very much": "Las sustituciones predecibles como '@' en lugar de 'a' no ayudan mucho"
 }, CUSTOM_TRANSLATIONS);
 
 // Apps con flow de registro dedicado (uno por app_slug, ver

@@ -30,7 +30,7 @@
     <td style="padding:10px 14px;font-size:13px;color:#1d1d1f;">{{fecha_evento}}</td>
   </tr>
 </table>
-<p style="font-size:12px;color:#888888;margin:16px 0 0;">El enlace para establecer tu contraseña es de un solo uso y expira en 24 horas. Si expira, solicita uno nuevo desde la pantalla de inicio de sesión.</p>
+<p style="font-size:12px;color:#888888;margin:16px 0 0;">El enlace para establecer tu contraseña es de un solo uso y expira en {{enlace_expiracion_texto}}. Si expira, solicita uno nuevo desde la pantalla de inicio de sesión.</p>
 [% endset %]
 [% endif %]
 [%- include "email_base_unified.html.j2" %]

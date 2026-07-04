@@ -1,4 +1,5 @@
 import uuid
+import bleach
 from datetime import datetime
 from typing import Optional, Literal, Dict
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
@@ -9,6 +10,20 @@ EMAIL_EVENT_TYPE = Literal[
     'email_verification', 'security_change'
 ]
 EMAIL_TEMPLATE_TYPE = Literal['integrated', 'custom_per_event']
+
+# system_name/logo_top_text/logo_bottom_text se renderizan SIN escapar
+# (innerHTML) en la página de login real vista por usuarios finales — no solo
+# en el preview del admin. Solo documentan soportar <br> (salto de línea), no
+# texto enriquecido general, así que se usa un allowlist estricto (bleach) en
+# vez de un denylist de patrones peligrosos (bypasseable, ej. onmouseover=,
+# <svg onload=>, etc. no cubiertos por una lista fija de palabras).
+_ALLOWED_TEXT_TAGS = ['br']
+
+
+def _sanitize_html_fragment(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return v
+    return bleach.clean(v, tags=_ALLOWED_TEXT_TAGS, attributes={}, strip=True)
 
 
 class EmailBodySchema(BaseModel):
@@ -65,10 +80,7 @@ class ThemeBase(BaseModel):
     @field_validator("system_name", mode="after")
     @classmethod
     def sanitize_system_name(cls, v: str) -> str:
-        for bad in ["<script", "javascript:", "onload", "onerror", "<iframe>"]:
-            if bad in v.lower():
-                raise ValueError(f"Dangerous content detected in system_name: {bad}")
-        return v
+        return _sanitize_html_fragment(v)
 
     @field_validator("email_footer_text", mode="before")
     @classmethod
@@ -89,6 +101,11 @@ class ThemeCreate(ThemeBase):
     bg_image_base64: Optional[str] = None
     logo_top_text: Optional[str] = Field(None, max_length=150)
     logo_bottom_text: Optional[str] = Field(None, max_length=150)
+
+    @field_validator("logo_top_text", "logo_bottom_text", mode="after")
+    @classmethod
+    def sanitize_logo_texts(cls, v: Optional[str]) -> Optional[str]:
+        return _sanitize_html_fragment(v)
 
 
 class ThemeUpdate(BaseModel):
@@ -142,6 +159,11 @@ class ThemeUpdate(BaseModel):
     def strip_footer(cls, v: object) -> object:
         return v.strip() if isinstance(v, str) else v
 
+    @field_validator("system_name", "logo_top_text", "logo_bottom_text", mode="after")
+    @classmethod
+    def sanitize_text_fragments(cls, v: Optional[str]) -> Optional[str]:
+        return _sanitize_html_fragment(v)
+
     @model_validator(mode='after')
     def coerce_email_verification(self) -> 'ThemeUpdate':
         if self.allow_self_registration is False:
@@ -165,6 +187,14 @@ class ThemeResponse(ThemeBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    # Defensa en profundidad: limpia también en lectura, por si hay filas ya
+    # persistidas antes de este fix (bleach.clean es idempotente — no rompe
+    # contenido ya limpio).
+    @field_validator("logo_top_text", "logo_bottom_text", mode="after")
+    @classmethod
+    def sanitize_logo_texts(cls, v: Optional[str]) -> Optional[str]:
+        return _sanitize_html_fragment(v)
 
 
 class ThemeResponseWithEmail(ThemeResponse):
@@ -214,3 +244,10 @@ class ThemePublic(BaseModel):
     custom_messages: Optional[Dict[str, str]] = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)
+
+    # ThemePublic alimenta directamente la página de login real (no solo el
+    # preview del admin) — misma defensa en profundidad que ThemeResponse.
+    @field_validator("system_name", "logo_top_text", "logo_bottom_text", mode="after")
+    @classmethod
+    def sanitize_text_fragments(cls, v: Optional[str]) -> Optional[str]:
+        return _sanitize_html_fragment(v)
