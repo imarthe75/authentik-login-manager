@@ -1,6 +1,13 @@
+/** Alineación de texto y diseño (izquierda, centro, derecha). */
 export type AlignValue = 'left' | 'center' | 'right';
+
+/** Tipo de fondo de pantalla a renderizar. */
 export type BgType = 'gradient' | 'color' | 'image';
+
+/** Tipo de envío de correo (integrado o plantilla personalizada por evento). */
 export type EmailTemplateType = 'integrated' | 'custom_per_event';
+
+/** Lista de todos los tipos de eventos de correo soportados en la plataforma. */
 export type EmailEventType =
   | 'password_reset'
   | 'new_account'
@@ -16,19 +23,25 @@ export type EmailEventType =
   | 'impersonation_started'
   | 'account_deleted';
 
+/** Estructura que define el cuerpo HTML y el asunto de una plantilla de correo. */
 export interface EmailBody {
   subject: string;
   body_html: string;
 }
 
+/** Diccionario opcional que mapea eventos de correo con sus plantillas asociadas. */
 export type EmailBodies = Partial<Record<EmailEventType, EmailBody>>;
 
+/** Configuración de visibilidad para los proveedores de autenticación social. */
 export interface SocialProviders {
   show_social_google: boolean;
   show_social_microsoft: boolean;
   show_social_gov_id: boolean;
 }
 
+/**
+ * Interfaz principal que representa la estructura completa del Tema de un Tenant.
+ */
 export interface Theme {
   id?: string;
   authentik_flow_slug: string;

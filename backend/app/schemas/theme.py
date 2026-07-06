@@ -21,12 +21,19 @@ _ALLOWED_TEXT_TAGS = ['br']
 
 
 def _sanitize_html_fragment(v: Optional[str]) -> Optional[str]:
+    """
+    Sanitiza fragmentos de texto HTML para evitar vulnerabilidades XSS.
+    Solo permite el uso de etiquetas de salto de línea (<br>).
+    """
     if v is None:
         return v
     return bleach.clean(v, tags=_ALLOWED_TEXT_TAGS, attributes={}, strip=True)
 
 
 class EmailBodySchema(BaseModel):
+    """
+    Esquema para definir el asunto y el cuerpo HTML de un correo electrónico.
+    """
     subject: str = Field('', max_length=200)
     body_html: str = Field('', max_length=50000)
 
@@ -37,6 +44,10 @@ class EmailBodySchema(BaseModel):
 
 
 class ThemeBase(BaseModel):
+    """
+    Esquema base que define la configuración de diseño visual, colores,
+    opacidades y flags de características de un tema de tenant.
+    """
     display_name: str = Field(..., max_length=150)
     system_name: str = Field("CASMARTS<br>Core", max_length=150)
     system_subtitle: str = Field("Gobierno del estado de México", max_length=255)
@@ -96,6 +107,10 @@ class ThemeBase(BaseModel):
 
 
 class ThemeCreate(ThemeBase):
+    """
+    Esquema utilizado para la creación de un nuevo tema de tenant,
+    el cual incluye recursos pesados (imágenes en formato Base64) y slugs de Authentik.
+    """
     authentik_flow_slug: str = Field(..., max_length=100)
     logo_top_base64: Optional[str] = None
     logo_bottom_base64: Optional[str] = None
@@ -110,6 +125,10 @@ class ThemeCreate(ThemeBase):
 
 
 class ThemeUpdate(BaseModel):
+    """
+    Esquema que permite la actualización parcial (patch) de la configuración
+    del tema de un tenant. Todos los campos son opcionales.
+    """
     authentik_app_slug: Optional[str] = Field(None, max_length=100)
     display_name: Optional[str] = Field(None, max_length=150)
     system_name: Optional[str] = Field(None, max_length=150)
@@ -173,10 +192,18 @@ class ThemeUpdate(BaseModel):
 
 
 class ThemeUpdateWithEmail(ThemeUpdate):
+    """
+    Esquema extendido de actualización que permite modificar tanto el tema
+    como los cuerpos de los correos electrónicos vinculados.
+    """
     email_bodies: Optional[Dict[str, EmailBodySchema]] = None
 
 
 class ThemeResponse(ThemeBase):
+    """
+    Esquema de respuesta detallado que devuelve toda la configuración de un tema,
+    incluyendo su ID de base de datos y timestamps.
+    """
     id: uuid.UUID
     authentik_flow_slug: str
     logo_top_base64: Optional[str] = None
@@ -203,6 +230,10 @@ class ThemeResponseWithEmail(ThemeResponse):
 
 
 class ThemePublic(BaseModel):
+    """
+    Esquema de respuesta simplificado expuesto públicamente para la interfaz de login,
+    sustituyendo los datos Base64 pesados por booleanos de presencia (`has_*`).
+    """
     display_name: str
     system_name: str
     system_subtitle: str

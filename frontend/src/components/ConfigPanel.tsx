@@ -1,6 +1,10 @@
 import React, { useRef } from 'react';
 
-// Darkens a #RRGGBB hex color by `amount` (0–1)
+/**
+ * Oscurece un color en formato hexadecimal de 6 dígitos (#RRGGBB) por una cantidad dada.
+ * @param hex Color en hexadecimal (ej. #FFFFFF).
+ * @param amount Cantidad a oscurecer como fracción entre 0 y 1.
+ */
 const darkenHex = (hex: string, amount = 0.2): string => {
   const h = hex.replace('#', '');
   if (!/^[0-9a-fA-F]{6}$/.test(h)) return hex;
@@ -16,6 +20,9 @@ import { AccessAndNotificationsTab } from './tabs/AccessAndNotificationsTab';
 import { TenantSelector } from './TenantSelector';
 import { ExpansionSettingsManager } from './ExpansionSettings';
 
+/**
+ * Propiedades para el componente del panel de configuración de temas.
+ */
 interface ConfigPanelProps {
   theme: Theme;
   isDirty: boolean;
@@ -40,6 +47,10 @@ const PREDEFINED_COLORS = [
   { name: 'Gris', color: '#424242', hover: '#616161' },
 ];
 
+/**
+ * Componente principal que representa el panel lateral de configuración del tema de login.
+ * Permite cambiar colores, cargar logotipos, configurar visibilidad y guardar cambios.
+ */
 export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   theme,
   isDirty,

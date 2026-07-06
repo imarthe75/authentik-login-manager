@@ -1,11 +1,20 @@
 import React, { useState } from 'react';
 import { AuthentikExpansionConfig } from '../types/models';
 
+/**
+ * Propiedades del componente ExpansionSettingsManager.
+ */
 interface ExpansionSettingsManagerProps {
+  /** Configuración inicial para poblar el estado del formulario. */
   initialConfig?: AuthentikExpansionConfig;
+  /** Callback opcional invocado al guardar la configuración modificada. */
   onSaveConfig?: (config: AuthentikExpansionConfig) => void;
 }
 
+/**
+ * Configuración predeterminada (fallback) utilizada cuando no se proporciona
+ * un valor inicial para algún parámetro del diseño de Authentik.
+ */
 const DEFAULT_CONFIG: AuthentikExpansionConfig = {
   mfaLayout: {
     totpInstructionsHtml: 'Escanea el código QR con tu aplicación autenticadora para configurar tu cuenta.',
@@ -52,10 +61,15 @@ const DEFAULT_CONFIG: AuthentikExpansionConfig = {
   }
 };
 
+/**
+ * Componente que gestiona la edición de configuraciones de expansión para Authentik
+ * (MFA, Consentimientos, Errores personalizados, Traducciones y Dashboard de usuario).
+ */
 export const ExpansionSettingsManager: React.FC<ExpansionSettingsManagerProps> = ({
   initialConfig,
   onSaveConfig
 }) => {
+  // Estado local que almacena la configuración de expansión actual combinada con los defaults
   const [config, setConfig] = useState<AuthentikExpansionConfig>({
     ...DEFAULT_CONFIG,
     ...initialConfig
