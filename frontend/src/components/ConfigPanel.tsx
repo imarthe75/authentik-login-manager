@@ -14,6 +14,7 @@ import { Theme } from '../types/theme';
 import { SavePhase } from '../hooks/useTheme';
 import { AccessAndNotificationsTab } from './tabs/AccessAndNotificationsTab';
 import { TenantSelector } from './TenantSelector';
+import { ExpansionSettingsManager } from './ExpansionSettings';
 
 interface ConfigPanelProps {
   theme: Theme;
@@ -939,6 +940,17 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
               </button>
             </div>
           </div>
+        </div>
+
+        {/* 10. ADVANCED CONFIGURATION & EXPANSION SETTINGS */}
+        <div className="border-b border-gray-200 pb-5 space-y-4">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase font-sans">
+            ⚙️ Personalización Avanzada (Stages, MFA, Errores)
+          </h3>
+          <ExpansionSettingsManager
+            initialConfig={theme.expansion_config || undefined}
+            onSaveConfig={(newConfig) => onUpdateField('expansion_config', newConfig)}
+          />
         </div>
 
       </div>

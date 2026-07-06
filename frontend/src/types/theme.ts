@@ -77,6 +77,7 @@ export interface Theme {
   email_template_type: EmailTemplateType;
   email_bodies?: EmailBodies;
   custom_messages?: Record<string, string> | null;
+  expansion_config?: import('./models').AuthentikExpansionConfig | null;
   created_at?: string;
   updated_at?: string;
 }

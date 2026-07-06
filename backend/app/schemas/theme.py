@@ -76,6 +76,7 @@ class ThemeBase(BaseModel):
     email_footer_text: Optional[str] = Field(None, max_length=255)
     email_template_type: EMAIL_TEMPLATE_TYPE = 'integrated'
     custom_messages: Optional[Dict[str, str]] = Field(default_factory=dict)
+    expansion_config: Optional[Dict] = Field(default_factory=dict)
 
     @field_validator("system_name", mode="after")
     @classmethod

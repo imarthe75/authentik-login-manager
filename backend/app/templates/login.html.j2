@@ -301,6 +301,9 @@ ak-skip-to-content {
 /* ── LOGOS ──────────────────────────────────────────── */
 .cs-logo { max-height: 110px; max-width: 340px; object-fit: contain; }
 .cs-logo-bot { max-height: 80px; max-width: 300px; object-fit: contain; }
+.cs-logo[src*="broken"], .cs-logo-bot[src*="broken"], .cs-logo:not([src]), .cs-logo-bot:not([src]), .cs-logo[src=""], .cs-logo-bot[src=""] {
+    display: none !important;
+}
 
 /* ── TEXTO DE LOGOS (panel derecho) ─────────────────── */
 .cs-logo-text {
@@ -589,7 +592,8 @@ new MutationObserver(function(ms){
             <img id="cs-logo-top" class="cs-logo"
                  src="[[ logo_top_url if logo_top_url else '' ]]"
                  alt="Logo principal"
-                 style="max-height:[% if theme.logos_height_pct %][[ (theme.logos_height_pct // 3) | int ]]vh[% else %]110px[% endif %]">
+                 style="max-height:[% if theme.logos_height_pct %][[ (theme.logos_height_pct // 3) | int ]]vh[% else %]110px[% endif %]"
+                 onerror="this.style.display='none'; if(this.parentElement) this.parentElement.style.display='none';">
         </div>
         <div id="cs-logo-top-text-wrap" style="[% if not logo_top_url and theme.logo_top_text %]display:flex[% else %]display:none[% endif %]; align-items:center; justify-content:center;">
             <div id="cs-logo-top-text" class="cs-logo-text">[[ theme.logo_top_text or '' ]]</div>
@@ -599,12 +603,36 @@ new MutationObserver(function(ms){
         <div id="cs-logo-bot-wrap" style="[% if logo_bottom_url %]display:flex[% else %]display:none[% endif %]; align-items:center; justify-content:center;">
             <img id="cs-logo-bot" class="cs-logo-bot"
                  src="[[ logo_bottom_url if logo_bottom_url else '' ]]"
-                 alt="Logo secundario">
+                 alt="Logo secundario"
+                 onerror="this.style.display='none'; if(this.parentElement) this.parentElement.style.display='none';">
         </div>
         <div id="cs-logo-bot-text-wrap" style="[% if not logo_bottom_url and theme.logo_bottom_text %]display:flex[% else %]display:none[% endif %]; align-items:center; justify-content:center;">
             <div id="cs-logo-bot-text" class="cs-logo-text-bot">[[ theme.logo_bottom_text or '' ]]</div>
         </div>
     </div>
+    
+    <!-- JS Failsafe to verify image loading status and hide broken logo containers -->
+    <script>
+      (function() {
+        function checkLogos() {
+          var topImg = document.getElementById('cs-logo-top');
+          var botImg = document.getElementById('cs-logo-bot');
+          if (topImg && (topImg.naturalWidth === 0 || topImg.src.indexOf('placeholder') !== -1 || !topImg.complete)) {
+            topImg.style.display = 'none';
+            var topWrap = document.getElementById('cs-logo-top-wrap');
+            if (topWrap) topWrap.style.display = 'none';
+          }
+          if (botImg && (botImg.naturalWidth === 0 || botImg.src.indexOf('placeholder') !== -1 || !botImg.complete)) {
+            botImg.style.display = 'none';
+            var botWrap = document.getElementById('cs-logo-bot-wrap');
+            if (botWrap) botWrap.style.display = 'none';
+          }
+        }
+        window.addEventListener('load', checkLogos);
+        setTimeout(checkLogos, 1000);
+        setTimeout(checkLogos, 3000);
+      })();
+    </script>
 
 </div>
 

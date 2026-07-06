@@ -149,6 +149,9 @@ class TenantTheme(Base):
     custom_messages: Mapped[dict | None] = mapped_column(
         JSON, nullable=True, server_default='{}'
     )
+    expansion_config: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, server_default='{}'
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
