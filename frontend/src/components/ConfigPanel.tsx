@@ -182,9 +182,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
       <button
         onClick={onSave}
         disabled={!isDirty}
-        className={`w-full py-3.5 text-xs font-bold tracking-widest text-white rounded-xl shadow-lg flex items-center justify-center gap-2 select-none uppercase transition-all font-sans ${
-          !isDirty ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-[#4272A5] hover:bg-[#2d5580] cursor-pointer'
-        }`}
+        className={`w-full py-3.5 text-xs font-bold tracking-widest text-white rounded-xl shadow-lg flex items-center justify-center gap-2 select-none uppercase transition-all font-sans ${!isDirty ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-[#4272A5] hover:bg-[#2d5580] cursor-pointer'
+          }`}
       >
         <Save className="w-4 h-4" />
         💾 Guardar y Aplicar
@@ -270,14 +269,12 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 key={pos}
                 type="button"
                 onClick={() => onUpdateField('layout_position', pos)}
-                className={`py-2 px-1 border-2 rounded-xl text-[10px] font-bold text-gray-500 hover:border-[#4272A5] hover:text-[#4272A5] flex flex-col items-center gap-2 transition-all font-sans bg-white ${
-                  theme.layout_position === pos ? 'border-[#4272A5] bg-[#4272A5]/5 text-[#4272A5]' : 'border-gray-200'
-                }`}
+                className={`py-2 px-1 border-2 rounded-xl text-[10px] font-bold text-gray-500 hover:border-[#4272A5] hover:text-[#4272A5] flex flex-col items-center gap-2 transition-all font-sans bg-white ${theme.layout_position === pos ? 'border-[#4272A5] bg-[#4272A5]/5 text-[#4272A5]' : 'border-gray-200'
+                  }`}
               >
                 <div
-                  className={`w-11 h-7 border rounded flex items-center p-0.5 gap-0.5 ${
-                    theme.layout_position === pos ? 'border-[#4272A5]' : 'border-gray-300'
-                  }`}
+                  className={`w-11 h-7 border rounded flex items-center p-0.5 gap-0.5 ${theme.layout_position === pos ? 'border-[#4272A5]' : 'border-gray-300'
+                    }`}
                   style={{
                     flexDirection: pos === 'right' ? 'row-reverse' : 'row',
                     justifyContent: pos === 'center' ? 'center' : 'flex-start',
@@ -318,9 +315,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     key={align}
                     type="button"
                     onClick={() => onUpdateField('name_align', align)}
-                    className={`py-1 border rounded-lg text-[10px] font-bold text-gray-500 hover:border-[#4272A5] hover:text-[#4272A5] font-sans ${
-                      theme.name_align === align ? 'border-[#4272A5] bg-[#4272A5]/5 text-[#4272A5]' : 'border-gray-200 bg-white'
-                    }`}
+                    className={`py-1 border rounded-lg text-[10px] font-bold text-gray-500 hover:border-[#4272A5] hover:text-[#4272A5] font-sans ${theme.name_align === align ? 'border-[#4272A5] bg-[#4272A5]/5 text-[#4272A5]' : 'border-gray-200 bg-white'
+                      }`}
                   >
                     {align === 'left' ? 'Izq' : align === 'right' ? 'Der' : 'Cen'}
                   </button>
@@ -347,9 +343,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     key={align}
                     type="button"
                     onClick={() => onUpdateField('subtitle_align', align)}
-                    className={`py-1 border rounded-lg text-[10px] font-bold text-gray-500 hover:border-[#4272A5] hover:text-[#4272A5] font-sans ${
-                      theme.subtitle_align === align ? 'border-[#4272A5] bg-[#4272A5]/5 text-[#4272A5]' : 'border-gray-200 bg-white'
-                    }`}
+                    className={`py-1 border rounded-lg text-[10px] font-bold text-gray-500 hover:border-[#4272A5] hover:text-[#4272A5] font-sans ${theme.subtitle_align === align ? 'border-[#4272A5] bg-[#4272A5]/5 text-[#4272A5]' : 'border-gray-200 bg-white'
+                      }`}
                   >
                     {align === 'left' ? 'Izq' : align === 'right' ? 'Der' : 'Cen'}
                   </button>
@@ -521,9 +516,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 key={type}
                 type="button"
                 onClick={() => onUpdateField('bg_type', type)}
-                className={`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all font-sans ${
-                  theme.bg_type === type ? 'bg-[#4272A5] text-white' : 'text-gray-500 hover:text-gray-800'
-                }`}
+                className={`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all font-sans ${theme.bg_type === type ? 'bg-[#4272A5] text-white' : 'text-gray-500 hover:text-gray-800'
+                  }`}
               >
                 {type === 'gradient' ? 'Gradiente' : type === 'color' ? 'Plano' : 'Imagen'}
               </button>
@@ -541,7 +535,17 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     onChange={(e) => onUpdateField('bg_gradient_from', e.target.value)}
                     className="w-10 h-8 border border-gray-300 rounded-lg cursor-pointer p-0.5"
                   />
-                  <span className="text-[10px] text-gray-500 uppercase font-mono font-bold">{theme.bg_gradient_from}</span>
+                  <input
+                    type="text"
+                    value={theme.bg_gradient_from}
+                    onChange={(e) => onUpdateField('bg_gradient_from', e.target.value)}
+                    className="w-20 h-7 border border-gray-300 rounded px-1 text-[10px] text-gray-500 uppercase font-mono font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="#000000"
+                  />
+                </div>
+                <div className="flex gap-1 mt-1">
+                  <button type="button" onClick={() => onUpdateField('bg_gradient_from', '#4272A5')} className="px-1 py-0.5 bg-[#4272A5] text-white text-[8px] rounded hover:opacity-95 font-sans">Civika</button>
+                  <button type="button" onClick={() => onUpdateField('bg_gradient_from', '#2d5580')} className="px-1 py-0.5 bg-[#2d5580] text-white text-[8px] rounded hover:opacity-95 font-sans">Hover</button>
                 </div>
               </div>
               <div>
@@ -553,7 +557,17 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     onChange={(e) => onUpdateField('bg_gradient_to', e.target.value)}
                     className="w-10 h-8 border border-gray-300 rounded-lg cursor-pointer p-0.5"
                   />
-                  <span className="text-[10px] text-gray-500 uppercase font-mono font-bold">{theme.bg_gradient_to}</span>
+                  <input
+                    type="text"
+                    value={theme.bg_gradient_to}
+                    onChange={(e) => onUpdateField('bg_gradient_to', e.target.value)}
+                    className="w-20 h-7 border border-gray-300 rounded px-1 text-[10px] text-gray-500 uppercase font-mono font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="#000000"
+                  />
+                </div>
+                <div className="flex gap-1 mt-1">
+                  <button type="button" onClick={() => onUpdateField('bg_gradient_to', '#4272A5')} className="px-1 py-0.5 bg-[#4272A5] text-white text-[8px] rounded hover:opacity-95 font-sans">Civika</button>
+                  <button type="button" onClick={() => onUpdateField('bg_gradient_to', '#2d5580')} className="px-1 py-0.5 bg-[#2d5580] text-white text-[8px] rounded hover:opacity-95 font-sans">Hover</button>
                 </div>
               </div>
             </div>
@@ -569,7 +583,17 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                   onChange={(e) => onUpdateField('bg_flat_color', e.target.value)}
                   className="w-10 h-8 border border-gray-300 rounded-lg cursor-pointer p-0.5"
                 />
-                <span className="text-xs text-gray-500 uppercase font-mono font-bold">{theme.bg_flat_color || '#b0aba0'}</span>
+                <input
+                  type="text"
+                  value={theme.bg_flat_color || '#b0aba0'}
+                  onChange={(e) => onUpdateField('bg_flat_color', e.target.value)}
+                  className="w-20 h-7 border border-gray-300 rounded px-1 text-xs text-gray-500 uppercase font-mono font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="#000000"
+                />
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => onUpdateField('bg_flat_color', '#4272A5')} className="px-2 py-1 bg-[#4272A5] text-white text-[10px] rounded hover:opacity-95 font-semibold font-sans">Civika</button>
+                  <button type="button" onClick={() => onUpdateField('bg_flat_color', '#2d5580')} className="px-2 py-1 bg-[#2d5580] text-white text-[10px] rounded hover:opacity-95 font-semibold font-sans">Hover</button>
+                </div>
               </div>
             </div>
           )}
@@ -634,9 +658,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                   onUpdateField('primary_color', c.color);
                   onUpdateField('hover_color', c.hover);
                 }}
-                className={`w-9 h-9 rounded-full shadow-sm cursor-pointer border-2 transition-all flex items-center justify-center text-white font-bold text-xs ${
-                  theme.primary_color === c.color ? 'border-gray-900 scale-110 shadow-md' : 'border-transparent'
-                }`}
+                className={`w-9 h-9 rounded-full shadow-sm cursor-pointer border-2 transition-all flex items-center justify-center text-white font-bold text-xs ${theme.primary_color === c.color ? 'border-gray-900 scale-110 shadow-md' : 'border-transparent'
+                  }`}
                 style={{ backgroundColor: c.color }}
                 title={c.name}
               >
@@ -657,7 +680,16 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 }}
                 className="w-9 h-7 border border-gray-300 rounded-lg cursor-pointer p-0.5"
               />
-              <span className="text-xs text-gray-500 uppercase font-mono font-bold">{theme.primary_color}</span>
+              <input
+                type="text"
+                value={theme.primary_color}
+                onChange={(e) => {
+                  onUpdateField('primary_color', e.target.value);
+                  onUpdateField('hover_color', darkenHex(e.target.value, 0.2));
+                }}
+                className="w-20 h-7 border border-gray-300 rounded px-1.5 text-xs text-gray-500 uppercase font-mono font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="#000000"
+              />
             </div>
           </div>
         </div>
@@ -815,9 +847,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     key={align}
                     type="button"
                     onClick={() => onUpdateField('privacy_align', align)}
-                    className={`py-1 border rounded-lg text-[10px] font-bold text-gray-500 hover:border-[#4272A5] hover:text-[#4272A5] font-sans ${
-                      theme.privacy_align === align ? 'border-[#4272A5] bg-[#4272A5]/5 text-[#4272A5]' : 'border-gray-200 bg-white'
-                    }`}
+                    className={`py-1 border rounded-lg text-[10px] font-bold text-gray-500 hover:border-[#4272A5] hover:text-[#4272A5] font-sans ${theme.privacy_align === align ? 'border-[#4272A5] bg-[#4272A5]/5 text-[#4272A5]' : 'border-gray-200 bg-white'
+                      }`}
                   >
                     {align === 'left' ? 'Izq' : align === 'right' ? 'Der' : 'Cen'}
                   </button>
@@ -850,7 +881,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
           {/* Predefined helpers */}
           <div className="bg-white border border-gray-200 rounded-xl p-3.5 space-y-3 shadow-sm text-left">
             <span className="text-[10px] font-bold text-[#4272A5] uppercase font-sans">Mensajes comunes</span>
-            
+
             <div className="space-y-3.5">
               <div>
                 <label className="block text-[10px] font-semibold text-gray-500 mb-1 font-sans">
@@ -896,7 +927,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
           {/* Arbitrary list editor */}
           <div className="bg-white border border-gray-200 rounded-xl p-3.5 space-y-3.5 shadow-sm text-left">
             <span className="text-[10px] font-bold text-[#4272A5] uppercase font-sans">Otras traducciones/mensajes</span>
-            
+
             {/* List existing non-predefined custom messages */}
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
               {Object.keys(customMsgs).filter(k => ![

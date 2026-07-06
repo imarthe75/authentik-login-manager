@@ -62,14 +62,14 @@ export const useTheme = () => {
 
   const isSaving = savePhase === 'saving' || savePhase === 'deploying';
 
-  const loadTheme = useCallback(async (slug: string, appSlug?: string | null) => {
+  const loadTheme = useCallback(async (slug: string, appSlug?: string | null, tenantId?: string | null) => {
     try {
       setError(null);
       setCurrentSlug(slug);
 
       if (appSlug) {
         try {
-          const data = await themesApi.getTheme(slug, appSlug);
+          const data = await themesApi.getTheme(slug, appSlug, tenantId);
           setTheme(data);
           setIsDirty(false);
           setSavePhase('idle');
@@ -77,7 +77,7 @@ export const useTheme = () => {
           return;
         } catch {
           try {
-            const globalData = await themesApi.getTheme(slug, null);
+            const globalData = await themesApi.getTheme(slug, null, tenantId);
             const newAppTheme: Theme = {
               ...globalData,
               authentik_app_slug: appSlug,
@@ -93,7 +93,7 @@ export const useTheme = () => {
         }
       } else {
         try {
-          const data = await themesApi.getTheme(slug, null);
+          const data = await themesApi.getTheme(slug, null, tenantId);
           setTheme(data);
           setIsDirty(false);
           setSavePhase('idle');
@@ -168,14 +168,14 @@ export const useTheme = () => {
     [updateField]
   );
 
-  const saveTheme = useCallback(async () => {
+  const saveTheme = useCallback(async (tenantId?: string | null) => {
     let currentPhase: SavePhase = 'idle';
     try {
       setError(null);
       setDeployError(null);
       currentPhase = 'saving';
       setSavePhase('saving');
-      const saved = await themesApi.upsertTheme(theme);
+      const saved = await themesApi.upsertTheme(theme, tenantId);
       setTheme(saved);
       setIsDirty(false);
       currentPhase = 'deploying';

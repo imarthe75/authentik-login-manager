@@ -52,7 +52,9 @@ DEFAULT_THEME = {
     "has_logo_bottom": False,
     "has_bg_image": False,
     "logo_top_text": None,
-    "logo_bottom_text": None
+    "logo_bottom_text": None,
+    "custom_messages": {},
+    "expansion_config": {}
 }
 
 async def resolve_app_slug(app: Optional[str]) -> Optional[str]:
@@ -176,6 +178,7 @@ async def get_public_theme(
             "show_field_labels": db_theme.show_field_labels,
             "is_custom": True,  # theme exists in DB
             "custom_messages": db_theme.custom_messages or {},
+            "expansion_config": db_theme.expansion_config or {},
         }
     else:
         logger.warning(f"No custom theme found for app='{app}' or flow_slug='{flow_slug}'. Using default theme.")

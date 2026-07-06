@@ -8,8 +8,8 @@ from app.cache import cache
 
 logger = logging.getLogger(__name__)
 
-# UUID del tenant por defecto (debe coincidir con la migración)
-DEFAULT_TENANT_UUID = "00000000-0000-0000-0000-000000000001"
+# UUID del tenant por defecto: CASmartS ID (tenant real, el semilla fue eliminado)
+DEFAULT_TENANT_UUID = "29843c3b-ca94-4a8d-a007-77e634081b0a"
 
 
 async def extract_tenant_id_from_domain(

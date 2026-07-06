@@ -12,7 +12,7 @@ import uuid
 import httpx
 from pathlib import Path
 from types import SimpleNamespace
-from fastapi import APIRouter, Depends, Header, HTTPException, status, Query, Request
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, status, Query, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, field_validator
 from jinja2 import Environment, FileSystemLoader
@@ -25,6 +25,7 @@ from app.models.tenant import Tenant
 from app.models.tenant_theme import TenantTheme
 from app.models.email_body import TenantEmailBody, EMAIL_EVENT_TYPES
 from app.utils.tenant import extract_tenant_id_from_domain
+from app.utils.session import verify_session_token
 from app.schemas.theme import (
     ThemeCreate, ThemeUpdate, ThemeUpdateWithEmail,
     ThemeResponse, ThemeResponseWithEmail, EmailBodySchema
@@ -46,7 +47,7 @@ ADMIN_KEY_RATE_LIMIT = 20       # intentos permitidos
 ADMIN_KEY_RATE_WINDOW = 300     # por ventana de 5 minutos, por IP
 
 
-async def verify_admin_key(request: Request, x_admin_key: str = Header(..., alias="X-Admin-Key")):
+def _admin_rate_limit_client_ip(request: Request) -> str:
     # Todo el tráfico pasa por casmarts-core-gateway, así que
     # request.client.host es SIEMPRE la IP interna del gateway (no la del
     # navegador real) — el rate limit terminaba compartiendo un solo balde
@@ -57,11 +58,10 @@ async def verify_admin_key(request: Request, x_admin_key: str = Header(..., alia
     client_ip = request.client.host if request.client else "unknown"
     if _is_trusted_proxy_peer(request):
         client_ip = request.headers.get("X-Real-IP", client_ip)
+    return client_ip
 
-    # Comparación constant-time: evita filtrar la clave por diferencias de tiempo.
-    if secrets.compare_digest(x_admin_key, settings.ADMIN_API_KEY):
-        return  # clave correcta: no consume el cupo de fuerza bruta
 
+async def _register_failed_admin_key_attempt(client_ip: str) -> None:
     # Solo los INTENTOS FALLIDOS cuentan para el límite — este check existe
     # para frenar fuerza bruta contra ADMIN_API_KEY, no para limitar el uso
     # normal de un admin ya autenticado. Antes se incrementaba en cada
@@ -78,7 +78,32 @@ async def verify_admin_key(request: Request, x_admin_key: str = Header(..., alia
             detail="Too many authentication attempts. Try again later."
         )
 
-    log.warning("Invalid X-Admin-Key attempt from IP %s", client_ip)
+
+async def verify_admin_key(
+    request: Request,
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
+    admin_session: Optional[str] = Cookie(None),
+):
+    # Modelo actual (2026-07-06): el navegador nunca conoce ADMIN_API_KEY.
+    # /api/v1/auth/login la valida una vez y emite una cookie de sesión
+    # HttpOnly firmada (ver app/utils/session.py); el frontend deja de
+    # embeber la clave en el bundle (VITE_ADMIN_KEY, hoy eliminado) — antes
+    # cualquier visitante podía leerla desde el JS servido al cliente y
+    # llamar directamente estos endpoints sin pasar por la UI.
+    # X-Admin-Key sigue soportado para automatización server-to-server
+    # (scripts, curl) que nunca corre en un navegador.
+    if admin_session and verify_session_token(admin_session, settings.SESSION_SECRET):
+        return
+
+    client_ip = _admin_rate_limit_client_ip(request)
+
+    if x_admin_key is not None:
+        # Comparación constant-time: evita filtrar la clave por diferencias de tiempo.
+        if secrets.compare_digest(x_admin_key, settings.ADMIN_API_KEY):
+            return  # clave correcta: no consume el cupo de fuerza bruta
+        await _register_failed_admin_key_attempt(client_ip)
+        log.warning("Invalid X-Admin-Key attempt from IP %s", client_ip)
+
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid administrative credentials."
@@ -138,6 +163,29 @@ def _build_theme_response_with_email(
     return ThemeResponseWithEmail(**data, email_bodies=email_bodies)
 
 
+async def _update_authentik_scope_descriptions(expansion_config: Optional[dict]) -> None:
+    """
+    Actualiza las descripciones de scopes personalizadas en la base de datos de Authentik
+    si se proporciona una configuración de consentimiento en la expansión.
+    """
+    if not expansion_config or not isinstance(expansion_config, dict):
+        return
+    custom_scope_desc = expansion_config.get("consentStage", {}).get("customScopeDescriptions")
+    if not custom_scope_desc or not isinstance(custom_scope_desc, dict):
+        return
+    try:
+        async with authentik_engine.begin() as conn:
+            for scope, desc in custom_scope_desc.items():
+                if scope and desc:
+                    await conn.execute(
+                        text("UPDATE authentik_providers_oauth2_scopemapping SET description = :desc WHERE scope_name = :scope"),
+                        {"desc": str(desc), "scope": str(scope)}
+                    )
+    except Exception as e:
+        log.error(f"Error updating Authentik scope descriptions: {e}")
+
+
+
 def _is_trusted_proxy_peer(request: Request) -> bool:
     """
     Defensa en profundidad: aunque el gateway nginx ya sobrescribe
@@ -173,24 +221,21 @@ def _is_trusted_proxy_peer(request: Request) -> bool:
 
 async def _get_tenant_context(
     request: Request,
-    db: AsyncSession
+    db: AsyncSession,
+    tenant_id: Optional[str] = None
 ) -> tuple[Tenant, str]:
     """
-    Extrae tenant del header X-Tenant-Domain o X-Forwarded-Host.
-
-    Order de precedencia:
-    1. X-Tenant-Domain header (si lo proporciona cliente Y la conexión viene
-       del gateway confiable — ver _is_trusted_proxy_peer)
-    2. X-Forwarded-Host header (misma condición de confianza)
-    3. request.client.host (si es local)
-    4. Usar tenant por defecto si todo falla
-
-    Returns:
-        (tenant_obj, tenant_id_str)
-
-    Raises:
-        HTTPException(404) si tenant no existe o está inactivo
+    Extrae tenant del parámetro tenant_id o del header X-Tenant-Domain / X-Forwarded-Host.
     """
+    if tenant_id:
+        try:
+            val = uuid.UUID(tenant_id)
+            result = await db.execute(select(Tenant).where(Tenant.id == val))
+            tenant = result.scalar_one_or_none()
+            if tenant:
+                return tenant, str(tenant.id)
+        except ValueError:
+            pass
 
     trusted = _is_trusted_proxy_peer(request)
     if not trusted:
@@ -205,9 +250,9 @@ async def _get_tenant_context(
         or (request.client.host if request.client else "localhost")
     )
 
-    tenant_id = await extract_tenant_id_from_domain(hostname, db)
+    t_id = await extract_tenant_id_from_domain(hostname, db)
     result = await db.execute(
-        select(Tenant).where(Tenant.id == tenant_id)
+        select(Tenant).where(Tenant.id == t_id)
     )
     tenant = result.scalar_one_or_none()
 
@@ -223,25 +268,48 @@ async def _get_tenant_context(
 # ── endpoints ────────────────────────────────────────────────────────────────
 
 @router.get("/authentik/applications", dependencies=[Depends(verify_admin_key)])
-async def list_authentik_applications():
+async def list_authentik_applications(
+    request: Request,
+    tenant_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
     try:
+        if tenant_id:
+            r = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+            tenant = r.scalar_one_or_none()
+        else:
+            tenant, _ = await _get_tenant_context(request, db)
+            
         async with authentik_engine.connect() as conn:
             result = await conn.execute(
                 text("SELECT slug, name FROM authentik_core_application ORDER BY name;")
             )
-            return [{"slug": row[0], "name": row[1]} for row in result.fetchall()]
-    except Exception:
+            apps = [{"slug": row[0], "name": row[1]} for row in result.fetchall()]
+            
+        if not tenant:
+            return apps
+            
+        domain = (tenant.domain_pattern or "").lower()
+        name = (tenant.name or "").lower()
+        
+        if "usana" in domain or "usana" in name:
+            return [app for app in apps if "usana" in app["slug"].lower() or "usana" in app["name"].lower()]
+        else:
+            return [app for app in apps if "usana" not in app["slug"].lower() and "usana" not in app["name"].lower()]
+    except Exception as e:
+        log.error(f"Error listing filtered apps: {e}")
         return []
 
 
 @router.get("", response_model=List[ThemeResponse], dependencies=[Depends(verify_admin_key)])
 async def list_themes(
     request: Request,
+    tenant_id: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db)
 ):
-    tenant, tenant_id = await _get_tenant_context(request, db)
+    tenant, tenant_id = await _get_tenant_context(request, db, tenant_id)
     result = await db.execute(
         select(TenantTheme)
         .where(TenantTheme.tenant_id == tenant_id)
@@ -253,8 +321,8 @@ async def list_themes(
 
 
 @router.post("", response_model=ThemeResponseWithEmail, dependencies=[Depends(verify_admin_key)])
-async def upsert_theme(request: Request, theme_in: ThemeCreate, db: AsyncSession = Depends(get_db)):
-    tenant, tenant_id = await _get_tenant_context(request, db)
+async def upsert_theme(request: Request, theme_in: ThemeCreate, tenant_id: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)):
+    tenant, tenant_id = await _get_tenant_context(request, db, tenant_id)
 
     if theme_in.authentik_app_slug:
         stmt = select(TenantTheme).where(
@@ -284,6 +352,8 @@ async def upsert_theme(request: Request, theme_in: ThemeCreate, db: AsyncSession
     await db.flush()
     await db.commit()
     await db.refresh(db_theme)
+
+    await _update_authentik_scope_descriptions(db_theme.expansion_config)
 
     await cache.delete(f"theme:{db_theme.authentik_flow_slug}:global")
     if db_theme.authentik_app_slug:
@@ -1265,7 +1335,16 @@ def _render_theme(env: Environment, theme) -> str:
     template = env.get_template("login.html.j2")
     import json
     custom_messages = getattr(theme, 'custom_messages', None) or {}
-    custom_messages_json = json.dumps(custom_messages)
+    # json.dumps no escapa '<'/'>'/'&' — sin esto, un valor conteniendo
+    # "</script>" cierra el <script> real de login.html.j2 anticipadamente y
+    # el contenido siguiente se ejecuta como HTML/JS (ver auditoría 2026-07-06).
+    # Es la técnica estándar para embeber JSON dentro de un bloque <script>.
+    custom_messages_json = (
+        json.dumps(custom_messages)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
     return template.render(
         theme=theme,
         api_base=api_base,
@@ -1283,6 +1362,53 @@ def _build_universal_template(
     env = _build_jinja2_env()
     fallback = global_theme if global_theme else (app_themes[0][1] if app_themes else _DEFAULT_THEME)
     return _render_theme(env, fallback)
+
+
+async def _sync_password_toggle(flow_slug: str, allow_show_password: bool) -> tuple[bool, Optional[str]]:
+    """Alinea el botón nativo de 'mostrar contraseña' de Authentik con
+    `theme.show_password_toggle`.
+
+    El mecanismo anterior intentaba ocultar/mostrar el botón vía CSS
+    (`.pf-c-input-group>.pf-c-button` en login.html.j2) — no puede funcionar:
+    el campo de contraseña real es el web component Lit `ak-flow-input-password`,
+    que vive en un Shadow DOM. Un <style> inyectado en el light DOM no cruza
+    ese límite, así que el CSS nunca alcanzaba el botón real (verificado
+    leyendo el bundle de Authentik 2026.2.4: `renderVisibilityToggle(){if(!this.allowShowPassword)return nothing;...}`).
+    El botón solo existe en absoluto si `PasswordStage.allow_show_password`
+    es True del lado de Authentik — hay que ajustar ese campo real vía API.
+
+    Un PasswordStage puede estar vinculado a varios flows (`flow_set`); se
+    filtra por el flow_slug del tema y se actualizan solo los stages
+    realmente usados por ese flujo.
+    """
+    if not settings.AUTHENTIK_API_TOKEN or not settings.AUTHENTIK_HOST:
+        return False, "AUTHENTIK_API_TOKEN/AUTHENTIK_HOST no configurados en .env."
+
+    headers = {"Authorization": f"Bearer {settings.AUTHENTIK_API_TOKEN}"}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{settings.AUTHENTIK_HOST}/api/v3/stages/password/", headers=headers)
+            resp.raise_for_status()
+            stages = resp.json().get("results", [])
+            matching = [s for s in stages if any(f.get("slug") == flow_slug for f in s.get("flow_set", []))]
+            if not matching:
+                return False, f"No se encontró ninguna etapa de contraseña vinculada al flujo '{flow_slug}'."
+
+            for stage in matching:
+                if stage.get("allow_show_password") == allow_show_password:
+                    continue
+                patch_resp = await client.patch(
+                    f"{settings.AUTHENTIK_HOST}/api/v3/stages/password/{stage['pk']}/",
+                    headers=headers,
+                    json={"allow_show_password": allow_show_password},
+                )
+                patch_resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        return False, f"Error de la API de Authentik: {e.response.text[:300]}"
+    except httpx.RequestError as e:
+        return False, f"No se pudo contactar a Authentik: {str(e)}"
+
+    return True, None
 
 
 @router.post("/{flow_slug}/deploy", dependencies=[Depends(verify_admin_key)])
@@ -1325,11 +1451,21 @@ async def deploy_theme(flow_slug: str, db: AsyncSession = Depends(get_db)):
         except Exception:
             pass
 
+    show_password_toggle = (
+        global_theme.show_password_toggle if global_theme
+        else (app_themes[0][1].show_password_toggle if app_themes else True)
+    )
+    password_toggle_synced, password_toggle_error = await _sync_password_toggle(flow_slug, show_password_toggle)
+    if not password_toggle_synced:
+        log.warning("No se pudo sincronizar el botón de mostrar contraseña para '%s': %s", flow_slug, password_toggle_error)
+
     deployed_apps = [slug for slug, _ in app_themes] or (["(global)"] if global_theme else [])
     return {
         "status": "deployed",
         "path": str(output_path),
         "apps": deployed_apps,
+        "password_toggle_synced": password_toggle_synced,
+        "password_toggle_error": password_toggle_error,
     }
 
 
@@ -1416,6 +1552,44 @@ async def update_tenant_settings(
     return {"default_app_url": tenant.config.get("default_app_url")}
 
 
+async def _sync_tenants_from_authentik(db: AsyncSession) -> None:
+    """
+    Sincroniza las marcas (brands) de Authentik hacia la tabla local de tenants.
+    """
+    try:
+        async with authentik_engine.connect() as conn:
+            result = await conn.execute(
+                text("SELECT brand_uuid, domain, branding_title FROM authentik_brands_brand")
+            )
+            authentik_brands = result.all()
+            
+        for brand in authentik_brands:
+            brand_id, domain, name = brand
+            
+            stmt = select(Tenant).where(Tenant.id == brand_id)
+            db_res = await db.execute(stmt)
+            existing = db_res.scalar_one_or_none()
+            
+            if existing:
+                existing.name = name
+                existing.domain_pattern = domain
+                db.add(existing)
+            else:
+                new_tenant = Tenant(
+                    id=brand_id,
+                    name=name,
+                    domain_pattern=domain,
+                    is_active=True,
+                    primary_color="#4272A5",
+                    secondary_color="#2d5580"
+                )
+                db.add(new_tenant)
+                
+        await db.commit()
+    except Exception as e:
+        log.error(f"Error syncing tenants from Authentik: {e}")
+
+
 @tenant_router.get("/list")
 async def list_available_tenants(db: AsyncSession = Depends(get_db)):
     """
@@ -1438,6 +1612,7 @@ async def list_available_tenants(db: AsyncSession = Depends(get_db)):
     ]
     """
     try:
+        await _sync_tenants_from_authentik(db)
         result = await db.execute(
             select(Tenant).where(Tenant.is_active == True).order_by(Tenant.name)
         )
@@ -1459,3 +1634,60 @@ async def list_available_tenants(db: AsyncSession = Depends(get_db)):
             status_code=500,
             detail="Failed to fetch tenants"
         )
+
+
+@router.get("/blueprint/download")
+async def download_brand_blueprint(
+    brand_name: str = Query(..., description="Nombre de la marca/brand"),
+    domain: str = Query(..., description="Dominio de la marca")
+):
+    """
+    Genera y descarga un Blueprint de Authentik para inicializar una nueva marca,
+    aprovisionar sus dominios y la estructura de grupos de usuarios inicial.
+    """
+    brand_slug = brand_name.lower().replace(" ", "-").strip()
+    yaml_content = f"""version: 1
+metadata:
+  name: Aprovisionamiento de Marca - {brand_name}
+entries:
+  # 1. Crear Marca (Brand) en Authentik
+  - identifiers:
+      domain: {domain}
+    model: authentik_brands.brand
+    attrs:
+      name: {brand_name}
+      domain: {domain}
+      is_default: false
+      branding_title: {brand_name} ID
+      
+  # 2. Crear Grupo Padre de la Marca (para usuarios de este dominio)
+  - identifiers:
+      name: {brand_name}-users
+    model: authentik_core.group
+    attrs:
+      name: {brand_name}-users
+      is_superuser: false
+
+  # 3. Crear Subgrupos de aplicaciones bajo este Tenant/Marca
+  - identifiers:
+      name: {brand_name}-starter
+    model: authentik_core.group
+    attrs:
+      name: {brand_name}-starter
+      parent: !Find [authentik_core.group, [name, {brand_name}-users]]
+
+  - identifiers:
+      name: {brand_name}-plane
+    model: authentik_core.group
+    attrs:
+      name: {brand_name}-plane
+      parent: !Find [authentik_core.group, [name, {brand_name}-users]]
+"""
+    from fastapi.responses import Response
+    return Response(
+        content=yaml_content,
+        media_type="text/yaml",
+        headers={
+            "Content-Disposition": f"attachment; filename=blueprint-brand-{brand_slug}.yaml"
+        }
+    )

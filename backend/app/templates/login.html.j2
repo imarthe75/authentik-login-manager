@@ -390,6 +390,12 @@ var ECSS=[
 "a{color:[[ theme.primary_color ]]!important}",
 "[% if not theme.show_forgot_password %].pf-c-login__main-footer,[class*='main-footer']{display:none!important}[% endif %]",
   "[% if not theme.show_field_labels %].pf-c-form__label,.pf-c-form__label-text{display:none!important}[% endif %]",
+  // show_password_toggle YA NO se controla aquí: el botón de "mostrar contraseña"
+  // real es el web component Lit ak-flow-input-password (Shadow DOM), fuera del
+  // alcance de este CSS inyectado en el light DOM. El backend sincroniza
+  // PasswordStage.allow_show_password vía API al hacer deploy (ver
+  // _sync_password_toggle en admin.py) — esta regla queda solo por si algún
+  // stage no-Lit llegara a renderizar un botón alcanzable, sin efecto real hoy.
   "[% if not theme.show_password_toggle %].pf-c-input-group>.pf-c-button,.pf-c-input-group .pf-c-button.pf-m-control,button[aria-label*='assword']{display:none!important}[% endif %]",
   "[% if not theme.show_app_message %]p:not(.pf-c-form__helper-text),.pf-c-login__main-body>p,[slot='description']{display:none!important;height:0!important;padding:0!important;margin:0!important;overflow:hidden!important}[% endif %]"
 ].join('');
@@ -767,11 +773,43 @@ new MutationObserver(function(ms){
         const fSub = document.getElementById('cs-form-subtitle');
         if (fSub) { fSub.innerHTML = t.system_subtitle; fSub.style.textAlign = t.subtitle_align; fSub.style.display = t.show_system_subtitle !== false ? 'block' : 'none'; }
 
+        /* Idioma forzado (forceLocale) - redirección limpia */
+        if (t.expansion_config && t.expansion_config.localization && t.expansion_config.localization.forceLocale) {
+            const forced = t.expansion_config.localization.forceLocale;
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('locale') !== forced) {
+                urlParams.set('locale', forced);
+                window.location.search = urlParams.toString();
+                return;
+            }
+        }
+
+        /* Combinar traducciones personalizadas */
+        if (t.custom_messages) {
+            for (var k in t.custom_messages) {
+                TRANSLATIONS[k.toLowerCase().trim().replace(/\s+/g, ' ')] = t.custom_messages[k];
+            }
+        }
+        if (t.expansion_config && t.expansion_config.localization && t.expansion_config.localization.customTranslations) {
+            var ct = t.expansion_config.localization.customTranslations;
+            for (var k in ct) {
+                TRANSLATIONS[k.toLowerCase().trim().replace(/\s+/g, ' ')] = ct[k];
+            }
+        }
+
+        /* Traducir elementos existentes del DOM */
+        const executorEl = document.querySelector('ak-flow-executor');
+        if (executorEl && executorEl.shadowRoot) {
+            translateNode(executorEl.shadowRoot);
+        }
+        translateNode(document.documentElement);
+
         /* inyección en shadow DOM: MutationObserver para máxima fiabilidad */
         csInjectShadow(t.primary_color, t.hover_color, {
             showForgot: t.show_forgot_password !== false,
             showPasswordToggle: t.show_password_toggle !== false,
-            showFieldLabels: t.show_field_labels !== false
+            showFieldLabels: t.show_field_labels !== false,
+            consentStage: t.expansion_config?.consentStage
         });
     }
 
@@ -962,6 +1000,33 @@ new MutationObserver(function(ms){
                 box-shadow: 0 0 0 3px ${primary}33 !important;
                 outline: none !important;
             }
+            /* ── Corrección de diseño e integración del Ojo de Contraseña (input-group) ── */
+            .pf-c-input-group {
+                display: flex !important;
+                width: 100% !important;
+            }
+            .pf-c-input-group > .pf-c-form-control,
+            .pf-c-input-group > input {
+                flex: 1 1 auto !important;
+                width: auto !important;
+                min-width: 0 !important;
+                border-top-right-radius: 0 !important;
+                border-bottom-right-radius: 0 !important;
+            }
+            .pf-c-input-group > .pf-c-button,
+            .pf-c-input-group > button {
+                border-top-left-radius: 0 !important;
+                border-bottom-left-radius: 0 !important;
+                border-top-right-radius: 8px !important;
+                border-bottom-right-radius: 8px !important;
+                border: 1.5px solid rgba(0,0,0,0.15) !important;
+                border-left: none !important;
+                background: rgba(255,255,255,0.8) !important;
+                padding: 0 0.85rem !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
             /* ── Footer "¿Olvidaste tu contraseña?" ── */
             .pf-c-login__main-footer, [class*="main-footer"] {
                 ${showForgot ? '' : 'display: none !important;'}
@@ -1021,6 +1086,36 @@ new MutationObserver(function(ms){
                 s.textContent = CSS;
                 root.appendChild(s);
             }
+
+            // Ajustar Consentimiento si aplica
+            const consent = root.querySelector('ak-stage-consent') || (root.host?.tagName?.toLowerCase() === 'ak-stage-consent' ? root : null);
+            if (consent && opts.consentStage) {
+                const cRoot = consent.shadowRoot || consent;
+                const cStage = opts.consentStage;
+                // Mostrar/ocultar icono de app
+                const icon = cRoot.querySelector('.ak-brand, ak-brand, img');
+                if (icon) {
+                    icon.style.display = cStage.showAppIcon !== false ? '' : 'none';
+                }
+                // Términos y Condiciones / Aviso de Privacidad
+                const terms = cStage.termsAndPrivacyLinks?.terms;
+                const privacy = cStage.termsAndPrivacyLinks?.privacy;
+                if ((terms || privacy) && !cRoot.querySelector('#cs-consent-links')) {
+                    const linksDiv = document.createElement('div');
+                    linksDiv.id = 'cs-consent-links';
+                    linksDiv.style.cssText = 'text-align: center; font-size: 0.82rem; margin: 1rem 0; width: 100%; display: block;';
+                    let html = '';
+                    if (terms) html += `<a href="${terms}" target="_blank" style="color: ${primary} !important; text-decoration: underline; font-weight: 500;">Términos de Servicio</a>`;
+                    if (terms && privacy) html += ' | ';
+                    if (privacy) html += `<a href="${privacy}" target="_blank" style="color: ${primary} !important; text-decoration: underline; font-weight: 500;">Aviso de Privacidad</a>`;
+                    linksDiv.innerHTML = html;
+                    const actions = cRoot.querySelector('.pf-c-form__group.pf-m-action, button, .pf-c-button');
+                    if (actions) {
+                        actions.parentNode.insertBefore(linksDiv, actions);
+                    }
+                }
+            }
+
             // Escanear shadow roots anidados ya existentes
             root.querySelectorAll('*').forEach(el => {
                 if (el.shadowRoot) processRoot(el.shadowRoot);

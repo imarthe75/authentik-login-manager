@@ -115,6 +115,16 @@ export const TenantSelector: React.FC<TenantSelectorProps> = ({
               <span className="text-xs text-gray-500">{selectedTenant.secondary_color}</span>
             </div>
           </div>
+          <div className="mt-3 pt-2.5 border-t border-blue-100 flex justify-between items-center">
+            <a
+              href={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api/v1/themes/blueprint/download?brand_name=${encodeURIComponent(selectedTenant.tenant_name)}&domain=${encodeURIComponent(selectedTenant.domain_pattern)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-blue-600 hover:text-blue-800 font-bold underline flex items-center gap-1"
+            >
+              📥 Descargar Blueprint inicializador
+            </a>
+          </div>
         </div>
       )}
     </div>

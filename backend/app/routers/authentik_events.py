@@ -183,8 +183,16 @@ async def _resolve_app_slug_from_groups(user_username: str) -> str | None:
         return None
 
 
-async def _resolve_app_slug(user_username: str, oauth_client_id: str | None) -> str | None:
-    return await _resolve_app_slug_from_client_id(oauth_client_id) or await _resolve_app_slug_from_groups(user_username)
+async def _resolve_app_slug(user_username: str, oauth_client_id: str | None, http_path: str | None = None) -> str | None:
+    slug = await _resolve_app_slug_from_client_id(oauth_client_id)
+    if slug:
+        return slug
+    if http_path:
+        path_lower = http_path.lower()
+        for known in KNOWN_APP_SLUGS:
+            if known in path_lower:
+                return known
+    return await _resolve_app_slug_from_groups(user_username)
 
 
 async def _get_lockout_threshold(db: AsyncSession) -> int:
@@ -405,7 +413,7 @@ async def handle_authentik_event(request: Request, db: AsyncSession = Depends(ge
         # {{aplicacion_nombre}}.
         app_slug, authorized_app_name = await _resolve_app_from_pk(authorized_app_pk)
     else:
-        app_slug = await _resolve_app_slug(user_username, oauth_client_id)
+        app_slug = await _resolve_app_slug(user_username, oauth_client_id, payload.get("http_path"))
 
     theme = None
     if app_slug:

@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     VALKEY_URL: str
     ADMIN_API_KEY: str = ""
+    # Firma las cookies de sesión de admin emitidas por /api/v1/auth/login.
+    # Deliberadamente separado de ADMIN_API_KEY: este secreto nunca se envía
+    # a un cliente ni se compara contra input de usuario, solo firma/valida
+    # tokens del lado del servidor.
+    SESSION_SECRET: str = ""
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
     PUBLIC_API_BASE_URL: str = "http://localhost:8000"
     # Hostname Docker del gateway/reverse-proxy confiable: solo se aceptan los
@@ -43,6 +48,14 @@ class Settings(BaseSettings):
         if not v:
             # Fallback securely as defined by mandatory-secure-web-skills guidelines:
             logging.warning("Generating ephemeral ADMIN_API_KEY. Instance-isolated!")
+            return secrets.token_hex(32)
+        return v
+
+    @field_validator("SESSION_SECRET", mode="after")
+    @classmethod
+    def validate_session_secret(cls, v: str) -> str:
+        if not v:
+            logging.warning("Generating ephemeral SESSION_SECRET. Instance-isolated!")
             return secrets.token_hex(32)
         return v
 

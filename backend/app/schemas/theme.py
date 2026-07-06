@@ -30,6 +30,21 @@ def _sanitize_html_fragment(v: Optional[str]) -> Optional[str]:
     return bleach.clean(v, tags=_ALLOWED_TEXT_TAGS, attributes={}, strip=True)
 
 
+def _sanitize_message_dict(v: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+    """
+    custom_messages se embebe como JSON dentro de un bloque <script> en la
+    página de login real (ver login.html.j2, CUSTOM_TRANSLATIONS) — no admite
+    ni siquiera <br>, a diferencia de system_name/system_subtitle que se
+    escriben via innerHTML fuera de un <script>.
+    """
+    if not v:
+        return v
+    return {
+        str(k): bleach.clean(str(val), tags=[], attributes={}, strip=True)
+        for k, val in v.items()
+    }
+
+
 class EmailBodySchema(BaseModel):
     """
     Esquema para definir el asunto y el cuerpo HTML de un correo electrónico.
@@ -89,10 +104,15 @@ class ThemeBase(BaseModel):
     custom_messages: Optional[Dict[str, str]] = Field(default_factory=dict)
     expansion_config: Optional[Dict] = Field(default_factory=dict)
 
-    @field_validator("system_name", mode="after")
+    @field_validator("system_name", "system_subtitle", mode="after")
     @classmethod
     def sanitize_system_name(cls, v: str) -> str:
         return _sanitize_html_fragment(v)
+
+    @field_validator("custom_messages", mode="after")
+    @classmethod
+    def sanitize_custom_messages(cls, v: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+        return _sanitize_message_dict(v)
 
     @field_validator("email_footer_text", mode="before")
     @classmethod
@@ -173,16 +193,22 @@ class ThemeUpdate(BaseModel):
     email_footer_text: Optional[str] = Field(None, max_length=255)
     email_template_type: Optional[EMAIL_TEMPLATE_TYPE] = None
     custom_messages: Optional[Dict[str, str]] = None
+    expansion_config: Optional[Dict] = None
 
     @field_validator("email_footer_text", mode="before")
     @classmethod
     def strip_footer(cls, v: object) -> object:
         return v.strip() if isinstance(v, str) else v
 
-    @field_validator("system_name", "logo_top_text", "logo_bottom_text", mode="after")
+    @field_validator("system_name", "system_subtitle", "logo_top_text", "logo_bottom_text", mode="after")
     @classmethod
     def sanitize_text_fragments(cls, v: Optional[str]) -> Optional[str]:
         return _sanitize_html_fragment(v)
+
+    @field_validator("custom_messages", mode="after")
+    @classmethod
+    def sanitize_custom_messages(cls, v: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+        return _sanitize_message_dict(v)
 
     @model_validator(mode='after')
     def coerce_email_verification(self) -> 'ThemeUpdate':
@@ -274,12 +300,18 @@ class ThemePublic(BaseModel):
     show_app_message: bool = False
     is_custom: bool = True
     custom_messages: Optional[Dict[str, str]] = Field(default_factory=dict)
+    expansion_config: Optional[Dict] = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)
 
     # ThemePublic alimenta directamente la página de login real (no solo el
     # preview del admin) — misma defensa en profundidad que ThemeResponse.
-    @field_validator("system_name", "logo_top_text", "logo_bottom_text", mode="after")
+    @field_validator("system_name", "system_subtitle", "logo_top_text", "logo_bottom_text", mode="after")
     @classmethod
     def sanitize_text_fragments(cls, v: Optional[str]) -> Optional[str]:
         return _sanitize_html_fragment(v)
+
+    @field_validator("custom_messages", mode="after")
+    @classmethod
+    def sanitize_custom_messages(cls, v: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+        return _sanitize_message_dict(v)

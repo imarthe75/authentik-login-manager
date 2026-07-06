@@ -45,7 +45,21 @@ const DEFAULT_CONFIG: AuthentikExpansionConfig = {
       'Username': 'Usuario',
       'Password': 'Contraseña',
       'Forgot password?': '¿Olvidaste tu contraseña?',
-      'Sign Up': 'Registrarse'
+      'Sign Up': 'Registrarse',
+      'Flow does not apply to current user': 'El flujo no aplica al usuario actual.',
+      'Continue': 'Continuar',
+      'Please enter your password.': 'Por favor introduce tu contraseña.',
+      'Log in to your account': 'Inicia sesión en tu cuenta',
+      'Reset your password': 'Restablecer contraseña',
+      'Your password has been reset successfully.': 'Tu contraseña ha sido restablecida con éxito.',
+      'Access denied': 'Acceso denegado',
+      'Something went wrong.': 'Algo salió mal.',
+      'Email address': 'Dirección de correo',
+      'Confirm Password': 'Confirmar contraseña',
+      'Passwords do not match': 'Las contraseñas no coinciden',
+      'Select an application': 'Selecciona una aplicación',
+      'Log out': 'Cerrar sesión',
+      'Are you sure you want to log out?': '¿Estás seguro de que deseas cerrar sesión?'
     },
     validationMessages: {
       requiredField: 'Este campo es obligatorio',
@@ -164,7 +178,12 @@ export const ExpansionSettingsManager: React.FC<ExpansionSettingsManagerProps> =
     <div className="w-full bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden text-left font-sans">
       {/* Navigation Sub-Tabs */}
       <div className="flex bg-gray-50 border-b border-gray-200 overflow-x-auto">
-        {(['mfa', 'consent', 'errors', 'localization', 'dashboard'] as const).map(tab => (
+        {/*
+          MFA, Errores y Dashboard se ocultan ya que no se pueden implementar de manera limpia
+          sin alterar el core de Authentik de forma invasiva. Quedan habilitados únicamente
+          Consentimiento y Traducciones.
+        */}
+        {(['consent', 'localization'] as const).map(tab => (
           <button
             key={tab}
             type="button"
@@ -175,11 +194,8 @@ export const ExpansionSettingsManager: React.FC<ExpansionSettingsManagerProps> =
                 : 'border-transparent text-gray-500 hover:text-gray-800'
             }`}
           >
-            {tab === 'mfa' && '🔒 MFA / 2FA'}
             {tab === 'consent' && '🤝 Consentimiento'}
-            {tab === 'errors' && '⚠️ Errores'}
             {tab === 'localization' && '🗣 Traducciones'}
-            {tab === 'dashboard' && '📱 Portal/Launchpad'}
           </button>
         ))}
       </div>

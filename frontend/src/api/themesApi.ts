@@ -1,12 +1,13 @@
 import { Theme, EmailBodies } from '../types/theme';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-const ADMIN_KEY = import.meta.env.VITE_ADMIN_KEY || '';
 
+// La autenticación admin viaja como cookie de sesión HttpOnly (ver
+// AdminLoginGate/authApi) — cada fetch admin incluye `credentials: 'include'`
+// en vez de un header con una clave estática embebida en el bundle.
 const getHeaders = (hostname?: string) => {
   const headers: any = {
     'Content-Type': 'application/json',
-    'X-Admin-Key': ADMIN_KEY,
   };
 
   // Agregar X-Tenant-Domain si se proporciona hostname
@@ -40,28 +41,39 @@ const sanitizeColors = (theme: Theme): Theme => {
 };
 
 export const themesApi = {
-  async getThemes(skip = 0, limit = 50): Promise<Theme[]> {
-    const response = await fetch(`${API_BASE}/api/v1/themes?skip=${skip}&limit=${limit}`, {
+  async getThemes(tenantId?: string | null, skip = 0, limit = 50): Promise<Theme[]> {
+    const url = tenantId
+      ? `${API_BASE}/api/v1/themes?tenant_id=${tenantId}&skip=${skip}&limit=${limit}`
+      : `${API_BASE}/api/v1/themes?skip=${skip}&limit=${limit}`;
+    const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(),
+      credentials: 'include',
     });
     if (!response.ok) throw new Error(`Failed to fetch themes list: ${response.statusText}`);
     return response.json();
   },
 
-  async getTheme(slug: string, appSlug?: string | null): Promise<Theme> {
-    const url = appSlug
+  async getTheme(slug: string, appSlug?: string | null, tenantId?: string | null): Promise<Theme> {
+    let url = appSlug
       ? `${API_BASE}/api/v1/themes/${slug}?app_slug=${appSlug}`
       : `${API_BASE}/api/v1/themes/${slug}`;
-    const response = await fetch(url, { method: 'GET', headers: getHeaders() });
+    if (tenantId) {
+      url += url.includes('?') ? `&tenant_id=${tenantId}` : `?tenant_id=${tenantId}`;
+    }
+    const response = await fetch(url, { method: 'GET', headers: getHeaders(), credentials: 'include' });
     if (!response.ok) throw new Error(`Failed to fetch theme for '${slug}': ${response.statusText}`);
     return response.json();
   },
 
-  async upsertTheme(theme: Theme): Promise<Theme> {
-    const response = await fetch(`${API_BASE}/api/v1/themes`, {
+  async upsertTheme(theme: Theme, tenantId?: string | null): Promise<Theme> {
+    const url = tenantId
+      ? `${API_BASE}/api/v1/themes?tenant_id=${tenantId}`
+      : `${API_BASE}/api/v1/themes`;
+    const response = await fetch(url, {
       method: 'POST',
       headers: getHeaders(),
+      credentials: 'include',
       body: JSON.stringify(sanitizeColors(theme)),
     });
     if (!response.ok) throw new Error(`Failed to save theme: ${response.statusText}`);
@@ -72,6 +84,7 @@ export const themesApi = {
     const response = await fetch(`${API_BASE}/api/v1/themes/${slug}`, {
       method: 'PATCH',
       headers: getHeaders(),
+      credentials: 'include',
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error(`Failed to patch theme: ${response.statusText}`);
@@ -82,6 +95,7 @@ export const themesApi = {
     const response = await fetch(`${API_BASE}/api/v1/themes/${slug}`, {
       method: 'DELETE',
       headers: getHeaders(),
+      credentials: 'include',
     });
     if (!response.ok) throw new Error(`Failed to delete theme: ${response.statusText}`);
   },
@@ -96,10 +110,14 @@ export const themesApi = {
     }
   },
 
-  async getAuthentikApplications(): Promise<{ slug: string; name: string }[]> {
-    const response = await fetch(`${API_BASE}/api/v1/themes/authentik/applications`, {
+  async getAuthentikApplications(tenantId?: string | null): Promise<{ slug: string; name: string }[]> {
+    const url = tenantId 
+      ? `${API_BASE}/api/v1/themes/authentik/applications?tenant_id=${tenantId}`
+      : `${API_BASE}/api/v1/themes/authentik/applications`;
+    const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(),
+      credentials: 'include',
     });
     if (!response.ok) throw new Error(`Failed to fetch Authentik applications: ${response.statusText}`);
     return response.json();
@@ -109,6 +127,7 @@ export const themesApi = {
     const response = await fetch(`${API_BASE}/api/v1/themes/${flowSlug}/deploy`, {
       method: 'POST',
       headers: getHeaders(),
+      credentials: 'include',
     });
     if (!response.ok) {
       const detail = await response.json().catch(() => ({ detail: response.statusText }));
@@ -127,6 +146,7 @@ export const themesApi = {
     const response = await fetch(`${API_BASE}/api/v1/themes/${flowSlug}/emails/test`, {
       method: 'POST',
       headers: getHeaders(),
+      credentials: 'include',
       body: JSON.stringify({ to_email: toEmail, event_type: eventType, app_slug: appSlug ?? null, display_name: displayName ?? null }),
     });
     if (!response.ok) {
@@ -149,6 +169,7 @@ export const themesApi = {
     const response = await fetch(`${API_BASE}/api/v1/themes/${flowSlug}/emails/test-real`, {
       method: 'POST',
       headers: getHeaders(),
+      credentials: 'include',
       body: JSON.stringify({ event_type: eventType, username: username ?? null }),
     });
     if (!response.ok) {
@@ -166,7 +187,7 @@ export const themesApi = {
     const params = appSlug ? `?app_slug=${appSlug}` : '';
     const response = await fetch(
       `${API_BASE}/api/v1/themes/${flowSlug}/emails/default-body/${eventType}${params}`,
-      { method: 'GET', headers: getHeaders() }
+      { method: 'GET', headers: getHeaders(), credentials: 'include' }
     );
     if (!response.ok) throw new Error(`Failed to fetch default email body: ${response.statusText}`);
     return response.json();
@@ -176,7 +197,7 @@ export const themesApi = {
     const params = appSlug ? `?app_slug=${appSlug}` : '';
     const response = await fetch(
       `${API_BASE}/api/v1/themes/${flowSlug}/emails/preview/${eventType}${params}`,
-      { method: 'GET', headers: getHeaders() }
+      { method: 'GET', headers: getHeaders(), credentials: 'include' }
     );
     if (!response.ok) throw new Error(`Email preview failed: ${response.statusText}`);
     return response.text();

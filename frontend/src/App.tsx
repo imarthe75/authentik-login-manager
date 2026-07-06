@@ -8,6 +8,7 @@ import { PasswordPolicyPanel } from './components/PasswordPolicyPanel';
 import { themesApi } from './api/themesApi';
 import { Theme } from './types/theme';
 import { TenantProvider, useTenant } from './contexts/TenantContext';
+import { AdminLoginGate } from './components/AdminLoginGate';
 
 const AppContent: React.FC = () => {
   const { tenant, loading: tenantLoading, error: tenantError } = useTenant();
@@ -35,19 +36,19 @@ const AppContent: React.FC = () => {
   const [activeEmailEvent, setActiveEmailEvent] = useState<string>('password_reset');
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
 
-  const fetchApps = async () => {
+  const fetchApps = async (tenantId?: string | null) => {
     try {
-      const apps = await themesApi.getAuthentikApplications();
+      const apps = await themesApi.getAuthentikApplications(tenantId);
       setAuthentikApps(apps);
     } catch (err) {
       console.error("Error fetching Authentik applications list: ", err);
     }
   };
 
-  const fetchThemes = async (preserveFlowSlug?: string, preserveAppSlug?: string | null) => {
+  const fetchThemes = async (preserveFlowSlug?: string, preserveAppSlug?: string | null, tenantId?: string | null) => {
     try {
       setLoading(true);
-      const data = await themesApi.getThemes();
+      const data = await themesApi.getThemes(tenantId);
       setThemesList(data);
       
       if (data.length > 0) {
@@ -64,7 +65,7 @@ const AppContent: React.FC = () => {
           setIsDirty(false);
         } else {
           // Fallback: load theme
-          loadTheme(preserveFlowSlug || 'default-authentication-flow', preserveAppSlug);
+          loadTheme(preserveFlowSlug || 'default-authentication-flow', preserveAppSlug, tenantId);
         }
       } else {
         // Safe fallback if DB is completely empty (initialize with seed)
@@ -128,15 +129,18 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     fetchThemes();
-    fetchApps();
   }, []);
+
+  useEffect(() => {
+    fetchApps(selectedTenantId);
+  }, [selectedTenantId]);
 
   const handleSelectSlug = (slug: string) => {
     if (isDirty) {
       const confirmLeave = window.confirm("Tienes cambios sin guardar en este portal. ¿Deseas descartarlos y cambiar de portal?");
       if (!confirmLeave) return;
     }
-    loadTheme(slug);
+    loadTheme(slug, null, selectedTenantId);
   };
   
   const handleChangeApp = (appSlug: string | null) => {
@@ -144,7 +148,7 @@ const AppContent: React.FC = () => {
       const confirmLeave = window.confirm("Tienes cambios sin guardar. ¿Deseas descartarlos y cambiar de aplicación?");
       if (!confirmLeave) return;
     }
-    loadTheme(theme.authentik_flow_slug, appSlug);
+    loadTheme(theme.authentik_flow_slug, appSlug, selectedTenantId);
   };
 
   const handleCreateTheme = (displayName: string, flowSlug: string) => {
@@ -205,9 +209,9 @@ const AppContent: React.FC = () => {
   const handleSave = async () => {
     const activeFlowSlug = theme.authentik_flow_slug;
     const activeAppSlug = theme.authentik_app_slug;
-    await saveTheme();
+    await saveTheme(selectedTenantId);
     // Re-fetch list to capture updated changes or creation, preserving the active theme
-    await fetchThemes(activeFlowSlug, activeAppSlug);
+    await fetchThemes(activeFlowSlug, activeAppSlug, selectedTenantId);
   };
 
   return (
@@ -344,7 +348,10 @@ const AppContent: React.FC = () => {
             authentikApps={authentikApps}
             onChangeApp={handleChangeApp}
             selectedTenantId={selectedTenantId}
-            onSelectTenant={(tenantId) => setSelectedTenantId(tenantId)}
+             onSelectTenant={(tenantId) => {
+               setSelectedTenantId(tenantId);
+               fetchThemes(undefined, null, tenantId);
+             }}
           />
           </section>
         )}
@@ -355,9 +362,11 @@ const AppContent: React.FC = () => {
 
 export const App: React.FC = () => {
   return (
-    <TenantProvider>
-      <AppContent />
-    </TenantProvider>
+    <AdminLoginGate>
+      <TenantProvider>
+        <AppContent />
+      </TenantProvider>
+    </AdminLoginGate>
   );
 };
 

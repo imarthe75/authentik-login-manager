@@ -11,6 +11,7 @@ from app.routers.admin import tenant_router
 from app.routers.email_sync import email_sync_router
 from app.routers.authentik_events import authentik_events_router
 from app.routers.password_policy import router as password_policy_router
+from app.routers.auth import auth_router
 from app.routers import admin, public
 
 logging.basicConfig(level=logging.INFO)
@@ -81,6 +82,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 # Include Routers
+app.include_router(auth_router)
 app.include_router(admin.router)
 app.include_router(tenant_router)
 app.include_router(email_sync_router)
