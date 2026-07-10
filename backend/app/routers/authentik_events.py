@@ -52,6 +52,14 @@ EVENT_ACTION_TO_EMAIL_TYPE = {
 # mientras la cuenta ya está bloqueada.
 _LOCKOUT_NOTIFY_COOLDOWN_SECONDS = 3600
 
+# Control anti-spam para eventos de alto volumen.
+# - login_success: no más de 1 correo por usuario cada 24h.
+# - app_authorized: no más de 1 correo por usuario+app cada 30 días.
+_EVENT_NOTIFY_COOLDOWN_SECONDS: dict[str, int] = {
+    "login_success": 24 * 60 * 60,
+    "app_authorized": 30 * 24 * 60 * 60,
+}
+
 # app_slugs con grupo de Authentik dedicado (ver Parte 1.5 / casmarts-app-enrollment.yaml).
 KNOWN_APP_SLUGS = {"starter", "consulta-smart", "idp-smart", "centinela-ai", "kiwi", "plane"}
 
@@ -351,6 +359,10 @@ async def handle_authentik_event(request: Request, db: AsyncSession = Depends(ge
     authorized_app_pk = payload.get("authorized_app_pk")
     actor_username: str | None = None
 
+    # Requisito operativo: no enviar más correos por inicio de sesión exitoso.
+    if action == "login":
+        return {"status": "ignored", "reason": "login_success deshabilitado"}
+
     if action == "model_updated":
         resolved = await _resolve_admin_toggle_event(payload)
         if resolved is None:
@@ -414,6 +426,19 @@ async def handle_authentik_event(request: Request, db: AsyncSession = Depends(ge
         app_slug, authorized_app_name = await _resolve_app_from_pk(authorized_app_pk)
     else:
         app_slug = await _resolve_app_slug(user_username, oauth_client_id, payload.get("http_path"))
+
+    # Cooldown por tipo de evento para evitar correos repetitivos ante
+    # reautenticaciones/consentimientos frecuentes del mismo usuario.
+    event_cooldown = _EVENT_NOTIFY_COOLDOWN_SECONDS.get(event_type)
+    if event_cooldown:
+        app_scope = app_slug or (authorized_app_pk or oauth_client_id or "global")
+        cooldown_key = f"event_notify_cooldown:{event_type}:{user_username.lower()}:{app_scope}"
+        if await cache.get(cooldown_key):
+            return {
+                "status": "ignored",
+                "reason": f"correo '{event_type}' ya enviado recientemente (cooldown)",
+            }
+        await cache.set(cooldown_key, "1", ex=event_cooldown)
 
     theme = None
     if app_slug:
