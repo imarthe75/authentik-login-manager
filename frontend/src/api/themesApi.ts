@@ -1,4 +1,5 @@
 import { Theme, EmailBodies } from '../types/theme';
+import { adminFetch } from './adminFetch';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -45,7 +46,7 @@ export const themesApi = {
     const url = tenantId
       ? `${API_BASE}/api/v1/themes?tenant_id=${tenantId}&skip=${skip}&limit=${limit}`
       : `${API_BASE}/api/v1/themes?skip=${skip}&limit=${limit}`;
-    const response = await fetch(url, {
+    const response = await adminFetch(url, {
       method: 'GET',
       headers: getHeaders(),
       credentials: 'include',
@@ -61,7 +62,7 @@ export const themesApi = {
     if (tenantId) {
       url += url.includes('?') ? `&tenant_id=${tenantId}` : `?tenant_id=${tenantId}`;
     }
-    const response = await fetch(url, { method: 'GET', headers: getHeaders(), credentials: 'include' });
+    const response = await adminFetch(url, { method: 'GET', headers: getHeaders(), credentials: 'include' });
     if (!response.ok) throw new Error(`Failed to fetch theme for '${slug}': ${response.statusText}`);
     return response.json();
   },
@@ -70,7 +71,7 @@ export const themesApi = {
     const url = tenantId
       ? `${API_BASE}/api/v1/themes?tenant_id=${tenantId}`
       : `${API_BASE}/api/v1/themes`;
-    const response = await fetch(url, {
+    const response = await adminFetch(url, {
       method: 'POST',
       headers: getHeaders(),
       credentials: 'include',
@@ -81,7 +82,7 @@ export const themesApi = {
   },
 
   async patchTheme(slug: string, data: Partial<Theme> & { email_bodies?: EmailBodies }): Promise<Theme> {
-    const response = await fetch(`${API_BASE}/api/v1/themes/${slug}`, {
+    const response = await adminFetch(`${API_BASE}/api/v1/themes/${slug}`, {
       method: 'PATCH',
       headers: getHeaders(),
       credentials: 'include',
@@ -92,7 +93,7 @@ export const themesApi = {
   },
 
   async deleteTheme(slug: string): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/v1/themes/${slug}`, {
+    const response = await adminFetch(`${API_BASE}/api/v1/themes/${slug}`, {
       method: 'DELETE',
       headers: getHeaders(),
       credentials: 'include',
@@ -114,7 +115,7 @@ export const themesApi = {
     const url = tenantId 
       ? `${API_BASE}/api/v1/themes/authentik/applications?tenant_id=${tenantId}`
       : `${API_BASE}/api/v1/themes/authentik/applications`;
-    const response = await fetch(url, {
+    const response = await adminFetch(url, {
       method: 'GET',
       headers: getHeaders(),
       credentials: 'include',
@@ -124,7 +125,7 @@ export const themesApi = {
   },
 
   async deployTheme(flowSlug: string): Promise<{ status: string; path: string }> {
-    const response = await fetch(`${API_BASE}/api/v1/themes/${flowSlug}/deploy`, {
+    const response = await adminFetch(`${API_BASE}/api/v1/themes/${flowSlug}/deploy`, {
       method: 'POST',
       headers: getHeaders(),
       credentials: 'include',
@@ -143,7 +144,7 @@ export const themesApi = {
     appSlug?: string,
     displayName?: string,
   ): Promise<{ status: string; to: string; subject: string }> {
-    const response = await fetch(`${API_BASE}/api/v1/themes/${flowSlug}/emails/test`, {
+    const response = await adminFetch(`${API_BASE}/api/v1/themes/${flowSlug}/emails/test`, {
       method: 'POST',
       headers: getHeaders(),
       credentials: 'include',
@@ -166,7 +167,7 @@ export const themesApi = {
     eventType: string,
     username?: string,
   ): Promise<Record<string, unknown>> {
-    const response = await fetch(`${API_BASE}/api/v1/themes/${flowSlug}/emails/test-real`, {
+    const response = await adminFetch(`${API_BASE}/api/v1/themes/${flowSlug}/emails/test-real`, {
       method: 'POST',
       headers: getHeaders(),
       credentials: 'include',
@@ -185,7 +186,7 @@ export const themesApi = {
     appSlug?: string | null
   ): Promise<{ subject: string; body_html: string }> {
     const params = appSlug ? `?app_slug=${appSlug}` : '';
-    const response = await fetch(
+    const response = await adminFetch(
       `${API_BASE}/api/v1/themes/${flowSlug}/emails/default-body/${eventType}${params}`,
       { method: 'GET', headers: getHeaders(), credentials: 'include' }
     );
@@ -195,7 +196,7 @@ export const themesApi = {
 
   async getEmailPreview(flowSlug: string, eventType: string, appSlug?: string | null): Promise<string> {
     const params = appSlug ? `?app_slug=${appSlug}` : '';
-    const response = await fetch(
+    const response = await adminFetch(
       `${API_BASE}/api/v1/themes/${flowSlug}/emails/preview/${eventType}${params}`,
       { method: 'GET', headers: getHeaders(), credentials: 'include' }
     );

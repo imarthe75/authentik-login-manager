@@ -44,31 +44,44 @@ body {
 }
 :root {
     --ak-global--background-image: none !important;
-    --cs-btn:        [[ theme.primary_color ]];
-    --cs-btn-hover:  [[ theme.hover_color ]];
-    --cs-panel-bg:   [[ theme.panel_bg_color ]];
-    --cs-card-bg:    rgba([[ theme.card_bg_color | hex_to_rgb ]], [[ theme.form_opacity ]]);
+    --cs-btn:        #2d5580;
+    --cs-btn-hover:  #244466;
+    --cs-panel-bg:   #ffffff;
+    --cs-card-bg:    rgba(255, 255, 255, 0.75);
     --cs-font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --cs-error-text: #b1151c;
+    --cs-text-primary: #111;
+    --cs-text-secondary: #555;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --cs-panel-bg:   #1a1a1a;
+        --cs-card-bg:    rgba(30, 30, 30, 0.85);
+        --cs-error-text: #ff6b6b;
+        --cs-text-primary: #f0f0f0;
+        --cs-text-secondary: #aaa;
+    }
 }
 
 /* ── FONDO COMPLETO ─────────────────────────────────── */
 #cs-bg {
     position: fixed; inset: 0; z-index: 0;
     background-size: cover; background-position: center;
-    [% if theme.bg_type == 'color' and theme.bg_flat_color %]
-    background-color: [[ theme.bg_flat_color ]];
-    background-image: none;
-    [% elif theme.bg_type == 'image' and theme.bg_image_base64 %]
-    background-image: url('[[ bg_image_url ]]');
-    [% else %]
-    background: linear-gradient(135deg, [[ theme.bg_gradient_from ]] 0%, [[ theme.bg_gradient_to ]] 100%);
-    background-image: none;
-    [% endif %]
-    opacity: [[ theme.bg_opacity ]];
+    
+    background-image: url('/lm/api/v1/public/theme/default-authentication-flow/image/bg_image');
+    
+    opacity: 1.0;
 }
 #cs-bg-overlay {
     position: fixed; inset: 0; z-index: 1;
     background: rgba(0,0,0,0.15); pointer-events: none;
+}
+
+@media (prefers-color-scheme: dark) {
+    #cs-bg-overlay {
+        background: rgba(0,0,0,0.4);
+    }
 }
 
 /* ── TARJETA UNIFICADA (PANTALLA PRINCIPAL) ─────────────────── */
@@ -87,7 +100,7 @@ body {
     border-radius: 24px;
     box-shadow: 0 24px 64px rgba(0, 42, 76, 0.12), 0 8px 24px rgba(0, 42, 76, 0.06);
     overflow: hidden;
-    
+
     /* Dimensiones balanceadas y perfectas para evitar desbordamientos */
     width: 820px;
     max-width: 90vw;
@@ -120,7 +133,9 @@ body {
     transform: translate(-50%, -50%) !important;
 }
 
-/* ── PANEL FORMULARIO (MITAD DEL CARD) ──────────────── */
+/* ── PANEL FORMULARIO (MITAD DEL CARD) ──────────────────
+   Contenedor SIN scroll: aloja el área scrolleable (#cs-scroll-area) y el
+   footer fijo (#cs-privacy). El scroll vive en el área interna, no aquí. */
 #cs-form-col {
     width: 50%;
     min-width: 325px;
@@ -129,26 +144,43 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding: 24px 28px;
-    overflow-y: auto;
+    padding: 0;
+    overflow: hidden;
     background: var(--cs-card-bg);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     border-radius: 0;
     box-shadow: none;
     height: 100%;
+    min-height: 0;
 }
-#cs-form-col::-webkit-scrollbar {
+
+/* ── ÁREA SCROLLEABLE (título → formulario → "¿Olvidaste tu contraseña?") ──
+   Crece para ocupar el espacio disponible del panel y scrollea cuando su
+   contenido excede esa altura. #cs-privacy queda fuera, anclado abajo. */
+#cs-scroll-area {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 24px 28px 8px 28px;
+}
+#cs-scroll-area::-webkit-scrollbar {
     width: 6px;
 }
-#cs-form-col::-webkit-scrollbar-track {
+#cs-scroll-area::-webkit-scrollbar-track {
     background: transparent;
 }
-#cs-form-col::-webkit-scrollbar-thumb {
+#cs-scroll-area::-webkit-scrollbar-thumb {
     background-color: rgba(0, 0, 0, 0.15);
     border-radius: 10px;
 }
-#cs-form-col::-webkit-scrollbar-thumb:hover {
+#cs-scroll-area::-webkit-scrollbar-thumb:hover {
     background-color: rgba(0, 0, 0, 0.3);
 }
 
@@ -157,8 +189,8 @@ body {
 /* ── TÍTULOS EN TARJETA FORM (siempre visibles) ─────── */
 #cs-form-title {
     font-weight: 800; font-size: 1.8rem; line-height: 1.2;
-    color: #111 !important;
-    text-align: [[ theme.name_align ]];
+    color: var(--cs-text-primary) !important;
+    text-align: center;
     margin-bottom: 4px;
     width: 100%;
     position: relative;
@@ -169,9 +201,9 @@ body {
     min-height: 2rem;
 }
 #cs-form-subtitle {
-    font-size: 0.9rem; color: #555 !important;
-    text-align: [[ theme.subtitle_align ]];
-    margin-bottom: 16px;
+    font-size: 0.9rem; color: var(--cs-text-secondary) !important;
+    text-align: center;
+    margin-bottom: 28px;
     width: 100%;
     position: relative;
     z-index: 100;
@@ -180,19 +212,31 @@ body {
     visibility: visible !important;
 }
 
-/* ── WRAPPER del executor (crece para llenar espacio disponible) ── */
+/* ── WRAPPER del executor ─────────────────────────────
+   CRÍTICO (2026-07-10): flex:0 0 auto — el wrap DEBE medir su contenido real.
+   Con flex:1 1 0 el wrap absorbía "el espacio restante" y se comprimía a una
+   caja más chica que el formulario; como overflow es visible, el form se
+   desbordaba por fuera y (a) el scroll de #cs-form-col nunca se activaba —la
+   suma de hijos flex "cabía"— y (b) #cs-privacy se posicionaba sobre la caja
+   comprimida, superponiéndose al link "¿Olvidaste tu contraseña?" del form.
+   Al medir su contenido, el form empuja hacia abajo: privacy queda debajo y
+   cuando el total excede la altura del card, overflow-y:auto activa el scroll.
+   NO volver a poner flex:1 1 0 (regresión recurrente). */
 #cs-executor-wrap {
-    flex: 1 1 0;
+    flex: 0 0 auto;
     min-height: 0;
     overflow: visible;
     width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: flex-start;
     /* Crea containing block propio — contiene position:fixed del shadow DOM en Firefox/Edge */
     transform: translateZ(0);
     isolation: isolate;
     contain: layout style;
+    padding-bottom: 24px;
+    margin-bottom: 12px;
 }
 
 /* ── ak-flow-executor: bloque puro, sin layout Patternfly ── */
@@ -261,7 +305,7 @@ ak-skip-to-content {
     justify-content: center;
     gap: 32px;
     padding: 36px;
-    background: rgba([[ theme.panel_bg_color | hex_to_rgb ]], [[ theme.logos_opacity ]]);
+    background: rgba(255, 255, 255, 0.8);
     border-radius: 0;
     box-shadow: none;
     overflow: hidden;
@@ -276,24 +320,92 @@ ak-skip-to-content {
 }
 
 
-/* ── RESPONSIVIDAD (MOBILE) ─────────────────────────── */
-@media (max-width: 768px) {
+/* ── RESPONSIVIDAD (TABLET) ────────────────────────────
+   Breakpoint intermedio para tablets/ventanas medianas (820px → 600px ancho) */
+@media (max-width: 920px) {
     #cs-screen {
-        width: 100%;
-        max-width: 400px;
-        height: auto !important;
-        min-height: 0 !important;
+        width: 95vw;
+        max-width: 600px;
+        height: 90vh !important;
+        min-height: 500px !important;
         max-height: 90vh !important;
+        overflow: hidden !important;
         flex-direction: column !important;
         align-items: center;
     }
     #cs-form-col {
         width: 100% !important;
-        height: auto !important;
-        max-height: 90vh !important;
+        flex: 1 1 auto !important;
+        overflow: hidden !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        min-height: 0 !important;
+    }
+    #cs-scroll-area {
+        padding: 2rem 1.5rem 8px 1.5rem !important;
+    }
+    #cs-privacy {
+        padding: 12px 1.5rem 16px 1.5rem !important;
     }
     #cs-logos-col {
-        display: none !important;
+        width: 100% !important;
+        height: auto !important;
+        max-height: 200px !important;
+        padding: 1rem !important;
+    }
+    #cs-screen.cs-left #cs-logos-col,
+    #cs-screen.cs-right #cs-logos-col {
+        border-left: none !important;
+        border-right: none !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+    }
+}
+
+/* ── RESPONSIVIDAD (MOBILE) ────────────────────────────
+   Breakpoint bajo: solo pantallas MUY pequeñas (< 480px ancho real) */
+@media (max-width: 480px) {
+    #cs-screen {
+        width: 95vw;
+        max-width: 380px;
+        height: 95vh !important;
+        min-height: 450px !important;
+        max-height: 95vh !important;
+        overflow: hidden !important;
+        flex-direction: column !important;
+        align-items: center;
+        padding: 1rem !important;
+    }
+    #cs-form-col {
+        width: 100% !important;
+        flex: 1 1 auto !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+        min-height: 0 !important;
+    }
+    #cs-scroll-area {
+        padding: 1rem 1rem 8px 1rem !important;
+    }
+    #cs-privacy {
+        padding: 10px 1rem 14px 1rem !important;
+    }
+    #cs-logos-col {
+        width: 100% !important;
+        height: auto !important;
+        max-height: 150px !important;
+        padding: 0.5rem !important;
+    }
+    #cs-form-title {
+        font-size: 1.4rem !important;
+    }
+    #cs-form-subtitle {
+        font-size: 0.85rem !important;
+        margin-bottom: 24px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    #cs-form-subtitle {
+        margin-bottom: 20px !important;
     }
 }
 
@@ -321,25 +433,33 @@ ak-skip-to-content {
 /* ── TÍTULO / SUBTÍTULO (panel logos) ──────────────── */
 #cs-title {
     font-weight: 800; font-size: 2.2rem; line-height: 1.15;
-    color: #fff; text-align: [[ theme.name_align ]];
+    color: #fff; text-align: center;
     text-shadow: 0 2px 10px rgba(0,0,0,0.4);
     margin-bottom: 6px;
 }
 #cs-subtitle {
     font-size: 0.95rem; color: rgba(255,255,255,0.85);
-    text-align: [[ theme.subtitle_align ]];
+    text-align: center;
     text-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
-/* ── AVISO DE PRIVACIDAD ────────────────────────────── */
+/* ── AVISO DE PRIVACIDAD (footer fijo, siempre visible) ──
+   flex:0 0 auto — NUNCA scrollea; queda anclado al fondo del panel, separado
+   del área scrolleable por un borde sutil. */
 #cs-privacy {
     font-size: 0.78rem;
-    text-align: [[ theme.privacy_align ]];
+    text-align: center;
     cursor: pointer; text-decoration: underline;
-    margin-top: auto; padding-top: 10px; width: 100%; max-width: 400px;
-    display: [[ 'block' if theme.privacy_pdf_url else 'none' ]];
+    flex: 0 0 auto;
+    width: 100%;
+    padding: 14px 28px 18px 28px;
+    margin: 0;
+    display: block;
     color: rgba(0,0,0,0.45);
-    flex-shrink: 0;
+    /* SIN background propio: es una fila flex aparte (no se solapa con el área
+       scrolleable), así hereda el fondo uniforme de #cs-form-col. Ponerle un
+       var(--cs-card-bg) apila dos capas semitransparentes y se ve más blanco. */
+    background: transparent;
 }
 #cs-privacy:hover { color: var(--cs-btn); }
 
@@ -381,27 +501,37 @@ var ECSS=[
 ".pf-c-login__main,.pf-c-card{background:transparent!important;background-color:transparent!important;box-shadow:none!important;border:none!important;border-radius:0!important;width:360px!important;max-width:100%!important;min-height:auto!important;margin:0 auto!important;padding:0!important;display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:stretch!important;box-sizing:border-box!important;transform:none!important}",
 /* Eliminar pseudo-elementos que puedan aportar sombra/borde */
 ".pf-c-card::before,.pf-c-card::after,.pf-c-login__main::before,.pf-c-login__main::after,.pf-c-login::before,.pf-c-login::after{display:none!important;box-shadow:none!important;border:none!important;content:none!important}",
-".pf-c-login__main-header,[class*='main-header'],ak-brand,.pf-c-brand,h1,h2,.pf-c-title,[class*='__header'],[slot='description'],ak-stage-identification p:not(.pf-c-form__helper-text),.pf-c-login__main-body > p{display:none!important;height:0!important;padding:0!important;margin:0!important;overflow:hidden!important}",
+".pf-c-login__main-header,[class*='main-header'],ak-brand,.pf-c-brand,h1,h2,.pf-c-title,[class*='__header'],[slot='description'],ak-stage-identification p:not(.pf-c-form__helper-text):not(.pf-c-alert__description):not(.pf-c-alert__title),.pf-c-login__main-body > p:not(.pf-c-alert__description):not(.pf-c-alert__title){display:none!important;height:0!important;padding:0!important;margin:0!important;overflow:hidden!important}",
 ".pf-c-login__footer,ak-locale-select,[class*='locale-select']{display:none!important;height:0!important;overflow:hidden!important}",
 ".pf-c-login__main-body,[class*='main-body']{padding:0!important;background:transparent!important;box-shadow:none!important;width:100%!important;display:flex!important;flex-direction:column!important;justify-content:center!important}",
-".pf-c-form-control,input:not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]){border-radius:8px!important;border:1.5px solid rgba(0,0,0,0.15)!important;background:rgba(255,255,255,0.8)!important;box-shadow:none!important;max-width:100%!important}",
-".pf-c-button.pf-m-primary,button[type=submit]{background-color:[[ theme.primary_color ]]!important;border-color:[[ theme.primary_color ]]!important;border-radius:8px!important;box-shadow:none!important;outline:none!important;width:100%!important}",
+".pf-c-form-control,input:not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]){border-radius:8px!important;border:1.5px solid rgba(0,0,0,0.15)!important;background:rgba(255,255,255,0.8)!important;box-shadow:none!important;max-width:100%!important;color:#111!important}",
+"@media (prefers-color-scheme: dark){.pf-c-form-control,input:not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]){background:rgba(50,50,50,0.8)!important;border-color:rgba(255,255,255,0.2)!important;color:#f0f0f0!important}}",
+".pf-c-button.pf-m-primary,button[type=submit]{background-color:#2d5580!important;border-color:#2d5580!important;border-radius:8px!important;box-shadow:none!important;outline:none!important;width:100%!important}",
 ".pf-c-login__main-footer,[class*='main-footer']{padding:0!important;margin-top:0.5rem!important;background:transparent!important}",
-"a{color:[[ theme.primary_color ]]!important}",
-"[% if not theme.show_forgot_password %].pf-c-login__main-footer,[class*='main-footer']{display:none!important}[% endif %]",
-  "[% if not theme.show_field_labels %].pf-c-form__label,.pf-c-form__label-text{display:none!important}[% endif %]",
+"a{color:#2d5580!important}",
+"",
+  "",
   // show_password_toggle YA NO se controla aquí: el botón de "mostrar contraseña"
   // real es el web component Lit ak-flow-input-password (Shadow DOM), fuera del
   // alcance de este CSS inyectado en el light DOM. El backend sincroniza
   // PasswordStage.allow_show_password vía API al hacer deploy (ver
   // _sync_password_toggle en admin.py) — esta regla queda solo por si algún
   // stage no-Lit llegara a renderizar un botón alcanzable, sin efecto real hoy.
-  "[% if not theme.show_password_toggle %].pf-c-input-group>.pf-c-button,.pf-c-input-group .pf-c-button.pf-m-control,button[aria-label*='assword']{display:none!important}[% endif %]",
-  "[% if not theme.show_app_message %]p:not(.pf-c-form__helper-text),.pf-c-login__main-body>p,[slot='description']{display:none!important;height:0!important;padding:0!important;margin:0!important;overflow:hidden!important}[% endif %]"
+  "",
+  "ak-stage-identification p:not(.pf-c-form__helper-text):not(.pf-c-alert__title):not(.pf-c-alert__description):not([class*='alert']):not([class*='error']),.pf-c-login__main-body > p:not(.pf-c-alert__title):not(.pf-c-alert__description):not([class*='alert']):not([class*='error']),[slot='description']{display:none!important;height:0!important;padding:0!important;margin:0!important;overflow:hidden!important}",
+  /* Override: re-mostrar el mensaje de error de login (<p> plano dentro de
+     ak-empty-state[slot=body]) que la regla anterior ocultaría. Mayor
+     especificidad => gana. Ver memoria flowhtml-css-recurring-regressions #1.
+     2026-07-09: agregado soporte para modo oscuro del sistema. */
+  "ak-empty-state [slot='body'],ak-empty-state [slot='body'] p,ak-empty-state [slot='body'] *,.pf-c-form__helper-text.pf-m-error,p.pf-m-error{display:revert!important;visibility:visible!important;opacity:1!important;height:auto!important;overflow:visible!important}",
+  "ak-empty-state [slot='body'] p,.pf-c-form__helper-text.pf-m-error{color:#b1151c!important;font-size:0.9rem!important}",
+  "@media (prefers-color-scheme: dark){ak-empty-state [slot='body'] p,.pf-c-form__helper-text.pf-m-error{color:#ff6b6b!important}}"
 ].join('');
 
-var CUSTOM_TRANSLATIONS = [[ custom_messages_json or '{}' ]];
+var CUSTOM_TRANSLATIONS = {};
 var TRANSLATIONS = Object.assign({
+    "failed to authenticate.": "Error de autenticación.",
+    "failed to authenticate": "Error de autenticación.",
     "enter the email address or username associated with your account.": "Introduzca la dirección de correo electrónico o nombre de usuario asociado con su cuenta.",
     "password recovery": "Recuperación de contraseña",
     "enter your username or email address.": "Introduzca su nombre de usuario o correo electrónico.",
@@ -480,10 +610,49 @@ function translateNode(node) {
     }
 }
 
+function setupErrorCleaner(shadow) {
+    // Intencionalmente SIN EFECTO. Antes esta función ocultaba TODA alerta/error
+    // (.pf-c-form__helper-text, [class*="error"], [class*="alert"]) con
+    // display:none inline !important en cada evento input/focusin. El campo de
+    // contraseña se autoenfoca al re-renderizar el stage tras un login fallido,
+    // así que el focusin disparaba clearError y HACÍA DESAPARECER el mensaje de
+    // error ("Error de autenticación") apenas aparecía — por eso se veía el
+    // recuadro rojo sin texto la 1ª vez y nada la 2ª. Un display:none inline
+    // !important puesto por JS NO puede revertirse desde ninguna hoja de estilo,
+    // por lo que las exclusiones :not(...) del CSS no servían de nada frente a él.
+    // Los errores ahora se limpian solos cuando Authentik re-renderiza el stage en
+    // el siguiente envío. Ver memoria flowhtml-css-recurring-regressions (regla #1).
+    return;
+}
+
+// Reescribe el botón "Ir al inicio" del stage de acceso denegado y restaura el
+// padding inferior del card. AccessDeniedStage.ts renderiza:
+//   <a class="pf-c-button pf-m-primary pf-m-block" href=${challenge.flowInfo.cancelUrl}>
+// donde cancelUrl reenvía al flujo de autenticación con next=/application/o/authorize/…
+// Como el usuario YA está autenticado, eso rebota de inmediato al authorize denegado
+// => LOOP. Reescribimos el href a un LOGOUT (default-invalidation-flow) que cierra
+// sesión y devuelve al login — el usuario puede reintentar con otra cuenta.
+// El botón vive en el shadow root del stage; el chrome/padding en <ak-flow-card>.
+function setupAccessDeniedStage(root) {
+    if (!root || !root.querySelectorAll) return;
+    var LOGOUT_URL = '/if/flow/default-invalidation-flow/';
+    root.querySelectorAll('a.pf-c-button, a.pf-m-primary').forEach(function(a) {
+        if (a.getAttribute('href') !== LOGOUT_URL) a.setAttribute('href', LOGOUT_URL);
+    });
+    // La var --pf-c-login__main-body--PaddingBottom:0 (fijada en ak-flow-executor)
+    // se HEREDA al shadow de ak-flow-card y deja el botón pegado al borde inferior.
+    // La restauramos SOLO en este card, sin afectar al login.
+    var card = root.querySelector('ak-flow-card');
+    if (card) {
+        card.style.setProperty('--pf-c-login__main-body--PaddingBottom', '1.5rem');
+        card.style.setProperty('--pf-c-login__main--PaddingBottom', '1.5rem');
+    }
+}
+
 function inject(root){
     if(!root||!root.appendChild)return;
-    var hostTag = root.host ? root.host.tagName.toLowerCase() : '';
-    if (root.host && hostTag !== 'ak-flow-executor' && hostTag !== 'ak-stage-identification' && hostTag !== 'ak-stage-password' && hostTag !== 'ak-stage-authenticator-validate') {
+    var hostTag = (root.host && root.host.tagName) ? root.host.tagName.toLowerCase() : '';
+    if (root.host && hostTag !== 'ak-flow-executor' && hostTag.indexOf('ak-stage-') !== 0) {
         return;
     }
     var ex=root.querySelector&&root.querySelector('#cs-intercept');
@@ -505,6 +674,10 @@ function inject(root){
                         if(n.shadowRoot)inject(n.shadowRoot);
                         if(n.querySelectorAll)n.querySelectorAll('*').forEach(function(e){if(e.shadowRoot)inject(e.shadowRoot);});
                     });
+                    setupErrorCleaner(root);
+                    if (hostTag === 'ak-stage-access-denied') {
+                        setupAccessDeniedStage(root);
+                    }
                 }
             });
         }).observe(root,{childList:true,subtree:true,characterData:true});
@@ -515,6 +688,10 @@ function inject(root){
         });
     }
     translateNode(root);
+    setupErrorCleaner(root);
+    if (hostTag === 'ak-stage-access-denied') {
+        setupAccessDeniedStage(root);
+    }
 }
 
 // Interceptar customElements.define para parchear connectedCallback ANTES del primer render
@@ -553,6 +730,74 @@ new MutationObserver(function(ms){
         }
     });
 }).observe(document.documentElement,{childList:true,subtree:true,characterData:true});
+
+// ═══ ESCÁNER GLOBAL: mensajes de error + acceso denegado ════════════════════════
+// Diagnóstico definitivo (Playwright headless, 2026-07-09): el <p class="pf-c-alert__title">
+// del error de login ("Error de autenticación.") queda con display:none SIN regla de
+// hoja de estilo que lo justifique y SIN style inline — algo que sólo un display inline
+// !important puede revertir (before:none → after:block confirmado). Por eso TODAS las
+// correcciones vía CSS :not(...) fallaron: no compiten contra ese origen. Aquí forzamos
+// la visibilidad del texto con estilo inline !important (el espejo de lo que hacía el
+// viejo setupErrorCleaner para ocultarlo).
+//
+// Los MutationObserver NO cruzan límites de shadow DOM, y el error aparece DENTRO del
+// shadow root del stage, así que un observer a nivel document no se entera: por eso
+// hacemos polling continuo (barato, la pantalla de login es efímera) recorriendo TODOS
+// los shadow roots. El mismo recorrido corrige el stage de acceso denegado
+// (ak-flow-card, que inject() no visita): botón pegado + loop de "Ir al inicio".
+(function(){
+"use strict";
+function showErrors(root){
+    // Texto del error: forzar visible con inline !important (vence al display:none fantasma)
+    root.querySelectorAll('.pf-c-alert__title,.pf-c-alert__description,.pf-c-form__helper-text.pf-m-error,p.pf-m-error').forEach(function(e){
+        e.style.setProperty('display','block','important');
+        e.style.setProperty('visibility','visible','important');
+        e.style.setProperty('opacity','1','important');
+        e.style.setProperty('height','auto','important');
+        e.style.setProperty('overflow','visible','important');
+        if(!e.style.color) e.style.setProperty('color','#151515','important');
+    });
+    // Contenedor de la alerta visible (sin tocar su display grid nativo)
+    root.querySelectorAll('.pf-c-alert,.pf-c-form__alert').forEach(function(e){
+        e.style.setProperty('visibility','visible','important');
+        e.style.setProperty('opacity','1','important');
+    });
+    // REGLA CRÍTICA 2026-07-10: Ocultar "Inicia sesión para continuar a X"
+    // SOLO en la pantalla de login — NUNCA en otras pantallas. Ese mensaje es
+    // redundante con el botón "Iniciar sesión" y ocupa espacio valioso. Solo
+    // aparece cuando entras vía una app (OAuth authorize a SonarQube, Plane…),
+    // NO en el login plano — por eso hay que probarlo con un flujo de app real.
+    // Ese <p> vive DENTRO del shadow root del stage de identificación, así que
+    // hay que consultar en `root` (cada shadow root que recorre scan), NO en
+    // `document` — sino nunca se alcanza. El selector completo
+    // ".pf-c-login__main-body > p" SÍ es válido en element.querySelectorAll
+    // (solo un combinator inicial suelto "> p" es inválido).
+    root.querySelectorAll('.pf-c-login__main-body > p').forEach(function(p){
+        // Solo ocultar EXACTAMENTE ese mensaje (texto trimmeado). No tocar otros
+        // párrafos que podrían ser mensajes de error/ayuda de otras pantallas.
+        if(p.textContent && p.textContent.trim().match(/^Inicia sesión para continuar/i)){
+            p.style.setProperty('display','none','important');
+            p.style.setProperty('height','0','important');
+            p.style.setProperty('padding','0','important');
+            p.style.setProperty('margin','0','important');
+        }
+    });
+}
+function scan(root){
+    if(!root||!root.querySelectorAll)return;
+    showErrors(root);
+    if(root.host&&root.host.tagName&&root.host.tagName.toLowerCase()==='ak-stage-access-denied'){
+        setupAccessDeniedStage(root);
+    }
+    var el=root.querySelector('ak-stage-access-denied');
+    if(el&&el.shadowRoot)setupAccessDeniedStage(el.shadowRoot);
+    root.querySelectorAll('*').forEach(function(n){if(n.shadowRoot)scan(n.shadowRoot);});
+}
+// Polling continuo cada 400ms (los observers no ven dentro de shadow roots).
+setInterval(function(){scan(document);},400);
+scan(document);
+new MutationObserver(function(){scan(document);}).observe(document.documentElement,{childList:true,subtree:true});
+})();
 })();
 </script>
 {% endblock %}
@@ -565,55 +810,55 @@ new MutationObserver(function(ms){
 <div id="cs-bg"></div>
 <div id="cs-bg-overlay"></div>
 
-<div id="cs-screen" class="cs-[[ theme.layout_position ]]">
+<div id="cs-screen" class="cs-left">
 
     <!-- ── COLUMNA FORMULARIO ─────────────────────── -->
+    <!-- Patrón footer-fijo: #cs-scroll-area scrollea (título → formulario →
+         "¿Olvidaste tu contraseña?"); #cs-privacy queda anclado abajo, siempre
+         visible, fuera del área que scrollea. -->
     <div id="cs-form-col">
-        <div id="cs-form-title" style="[% if not theme.show_system_name %]display:none;[% endif %]">[[ theme.system_name ]]</div>
-        <div id="cs-form-subtitle" style="[% if not theme.show_system_subtitle %]display:none;[% endif %]">[[ theme.system_subtitle ]]</div>
+        <div id="cs-scroll-area">
+            <div id="cs-form-title" style="">CASMARTS<br>Core</div>
+            <div id="cs-form-subtitle" style="">Smart Systems</div>
 
-        <ak-skip-to-content></ak-skip-to-content>
-        <ak-message-container></ak-message-container>
-        <div id="cs-executor-wrap">
-            <ak-flow-executor
-                slug="{{ flow.slug }}"
-                data-layout="{{ flow.layout|default:'stacked' }}"
-                loading
-            >
-                {% include "base/placeholder.html" %}
-            </ak-flow-executor>
+            <ak-skip-to-content></ak-skip-to-content>
+            <ak-message-container></ak-message-container>
+            <div id="cs-executor-wrap">
+                <ak-flow-executor
+                    slug="{{ flow.slug }}"
+                    data-layout="{{ flow.layout|default:'stacked' }}"
+                    loading
+                >
+                    {% include "base/placeholder.html" %}
+                </ak-flow-executor>
+            </div>
         </div>
-
-        [% if theme.privacy_pdf_url %]
         <span id="cs-privacy" onclick="csPdfOpen()">Aviso de Privacidad</span>
-        [% else %]
-        <span id="cs-privacy" onclick="csPdfOpen()" style="display:none">Aviso de Privacidad</span>
-        [% endif %]
     </div>
 
     <!-- ── COLUMNA LOGOS ──────────────────────────── -->
-    <div id="cs-logos-col" style="[% if not theme.show_logos_panel %]display:none;[% endif %]">
+    <div id="cs-logos-col" style="">
         <!-- Logo superior: imagen o texto -->
-        <div id="cs-logo-top-wrap" style="[% if logo_top_url %]display:flex[% else %]display:none[% endif %]; align-items:center; justify-content:center;">
+        <div id="cs-logo-top-wrap" style="display:flex; align-items:center; justify-content:center;">
             <img id="cs-logo-top" class="cs-logo"
-                 src="[[ logo_top_url if logo_top_url else '' ]]"
+                 src="/lm/api/v1/public/theme/default-authentication-flow/image/logo_top"
                  alt="Logo principal"
-                 style="max-height:[% if theme.logos_height_pct %][[ (theme.logos_height_pct // 3) | int ]]vh[% else %]110px[% endif %]"
+                 style="max-height:110px"
                  onerror="this.style.display='none'; if(this.parentElement) this.parentElement.style.display='none';">
         </div>
-        <div id="cs-logo-top-text-wrap" style="[% if not logo_top_url and theme.logo_top_text %]display:flex[% else %]display:none[% endif %]; align-items:center; justify-content:center;">
-            <div id="cs-logo-top-text" class="cs-logo-text">[[ theme.logo_top_text or '' ]]</div>
+        <div id="cs-logo-top-text-wrap" style="display:none; align-items:center; justify-content:center;">
+            <div id="cs-logo-top-text" class="cs-logo-text"></div>
         </div>
 
         <!-- Logo inferior: imagen o texto -->
-        <div id="cs-logo-bot-wrap" style="[% if logo_bottom_url %]display:flex[% else %]display:none[% endif %]; align-items:center; justify-content:center;">
+        <div id="cs-logo-bot-wrap" style="display:flex; align-items:center; justify-content:center;">
             <img id="cs-logo-bot" class="cs-logo-bot"
-                 src="[[ logo_bottom_url if logo_bottom_url else '' ]]"
+                 src="/lm/api/v1/public/theme/default-authentication-flow/image/logo_bottom"
                  alt="Logo secundario"
                  onerror="this.style.display='none'; if(this.parentElement) this.parentElement.style.display='none';">
         </div>
-        <div id="cs-logo-bot-text-wrap" style="[% if not logo_bottom_url and theme.logo_bottom_text %]display:flex[% else %]display:none[% endif %]; align-items:center; justify-content:center;">
-            <div id="cs-logo-bot-text" class="cs-logo-text-bot">[[ theme.logo_bottom_text or '' ]]</div>
+        <div id="cs-logo-bot-text-wrap" style="display:none; align-items:center; justify-content:center;">
+            <div id="cs-logo-bot-text" class="cs-logo-text-bot"></div>
         </div>
     </div>
     
@@ -950,8 +1195,8 @@ new MutationObserver(function(ms){
             .pf-c-title,
             [class*="__header"],
             [slot="description"],
-            ak-stage-identification p:not(.pf-c-form__helper-text),
-            .pf-c-login__main-body > p {
+            ak-stage-identification p:not(.pf-c-form__helper-text):not(.pf-c-alert__title):not(.pf-c-alert__description):not([class*="alert"]):not([class*="error"]),
+            .pf-c-login__main-body > p:not(.pf-c-alert__title):not(.pf-c-alert__description):not([class*="alert"]):not([class*="error"]) {
                 display: none !important;
                 height: 0 !important;
                 padding: 0 !important;
@@ -1057,6 +1302,26 @@ new MutationObserver(function(ms){
             }
             a { color: ${primary} !important; }
             .pf-c-form__label-text { color: rgba(0,0,0,0.7) !important; font-size: 0.85rem !important; }
+            /* ── Visibilidad del mensaje de error de login ──────────────────────
+               En este Authentik (2026.2) el error NO es un .pf-c-alert: el stage lo
+               renderiza como <p> plano dentro de <ak-empty-state ...><div slot="body">.
+               Las reglas de arriba ocultan <p> sin clase (para suprimir el subtítulo
+               redundante del stage), lo que también tragaba este <p>. Este override,
+               de mayor especificidad, lo vuelve a mostrar. El .pf-c-form__helper-text
+               .pf-m-error cubre además el error a nivel de campo. */
+            ak-empty-state [slot="body"], ak-empty-state [slot="body"] * ,
+            ak-empty-state [slot="body"] p,
+            .pf-c-form__helper-text.pf-m-error, p.pf-m-error, [class*="error"] {
+                display: revert !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            ak-empty-state [slot="body"] p, .pf-c-form__helper-text.pf-m-error {
+                color: #b1151c !important;
+                font-size: 0.9rem !important;
+            }
             /* ── Toggle visibilidad de contraseña ── */
             .pf-c-input-group > button,
             .pf-c-input-group .pf-c-button.pf-m-control,
@@ -1169,10 +1434,10 @@ new MutationObserver(function(ms){
     // ── INYECCIÓN INMEDIATA (Firefox/Edge) ──────────────────────────────────
     // Se ejecuta SIN esperar al API fetch — usa colores del tema global (Jinja2)
     // Cuando applyTheme() reciba los colores reales, processRoot actualizará el CSS
-    csInjectShadow('[[ theme.primary_color ]]', '[[ theme.hover_color ]]', {
-        showForgot: [[ theme.show_forgot_password | lower ]],
-        showPasswordToggle: [[ theme.show_password_toggle | lower ]],
-        showFieldLabels: [[ theme.show_field_labels | lower ]]
+    csInjectShadow('#2d5580', '#244466', {
+        showForgot: true,
+        showPasswordToggle: true,
+        showFieldLabels: true
     });
 
     window.csPdfOpen = function() {

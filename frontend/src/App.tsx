@@ -235,6 +235,18 @@ const AppContent: React.FC = () => {
           </div>
         </div>
 
+        {/* Manuals Download Links */}
+        <div className="flex items-center gap-2">
+          <a href="/docs/manual-tecnico-manager.md" download
+             className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors">
+            📖 Manual Técnico
+          </a>
+          <a href="/docs/manual-api.md" download
+             className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors">
+            🔌 Manual API
+          </a>
+        </div>
+
         {/* Dropdown theme selection */}
         <div className="w-56">
           {!loading ? (

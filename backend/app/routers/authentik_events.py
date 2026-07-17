@@ -195,11 +195,18 @@ async def _resolve_app_slug(user_username: str, oauth_client_id: str | None, htt
     slug = await _resolve_app_slug_from_client_id(oauth_client_id)
     if slug:
         return slug
-    if http_path:
-        path_lower = http_path.lower()
-        for known in KNOWN_APP_SLUGS:
-            if known in path_lower:
-                return known
+
+    # CAMBIO 2026-07-09: ANTES resolvía cualquier app si su nombre aparecía
+    # en el http_path, incluyendo query params (ambiguo + frágil cuando hay
+    # múltiples apps en la URL). AHORA solo resuelve si el PATH (sin ?) contiene
+    # la app explícitamente, p. ej. /password-reset-centinela/ (no implementado
+    # en nuestro flujo) — rechaza query-param-based resolution para evitar
+    # hijack por sesiones anteriores / enlaces con ?app=X. Sin esto, un usuario
+    # multi-app que hace password reset mientras tenía ?app=centinela en otra
+    # pestaña podría recibir branding de Centinela aunque el reset fuera desde
+    # Starter (confirmado en vivo 2026-07-09).
+    # Fallback: http_path se ignora, vuelve a _resolve_app_slug_from_groups.
+
     return await _resolve_app_slug_from_groups(user_username)
 
 
@@ -427,6 +434,12 @@ async def handle_authentik_event(request: Request, db: AsyncSession = Depends(ge
     else:
         app_slug = await _resolve_app_slug(user_username, oauth_client_id, payload.get("http_path"))
 
+    # DEBUG: Log full resolution chain para diagnosticar email branding equivocado
+    log.warning(
+        "email_app_resolution: user=%s event=%s oauth_client_id=%s http_path=%s → app_slug=%s",
+        user_username, event_type, oauth_client_id, payload.get("http_path"), app_slug
+    )
+
     # Cooldown por tipo de evento para evitar correos repetitivos ante
     # reautenticaciones/consentimientos frecuentes del mismo usuario.
     event_cooldown = _EVENT_NOTIFY_COOLDOWN_SECONDS.get(event_type)
@@ -441,18 +454,23 @@ async def handle_authentik_event(request: Request, db: AsyncSession = Depends(ge
         await cache.set(cooldown_key, "1", ex=event_cooldown)
 
     theme = None
+    theme_source = None
     if app_slug:
         r = await db.execute(select(TenantTheme).where(
             TenantTheme.authentik_flow_slug == _FLOW_SLUG,
             TenantTheme.authentik_app_slug == app_slug,
         ))
         theme = r.scalar_one_or_none()
+        if theme:
+            theme_source = f"app-specific ({app_slug})"
     if theme is None:
         r = await db.execute(select(TenantTheme).where(
             TenantTheme.authentik_flow_slug == _FLOW_SLUG,
             TenantTheme.authentik_app_slug.is_(None),
         ))
         theme = r.scalar_one_or_none()
+        if theme:
+            theme_source = "global"
     if not theme:
         raise HTTPException(status_code=404, detail=f"No hay tema configurado para flow '{_FLOW_SLUG}'.")
 
@@ -498,7 +516,13 @@ async def handle_authentik_event(request: Request, db: AsyncSession = Depends(ge
             logo_bottom_url = f'{settings.PUBLIC_API_BASE_URL}/api/v1/public/theme/{_FLOW_SLUG}/image/logo_bottom{app_qs}'
 
     cta_url = f"https://auth.casmart.internal/if/flow/{_CTA_FLOW_MAP.get(event_type, 'default-authentication-flow')}/"
-    user_name_full = user_username.split('@')[0].replace('.', ' ').title()
+    # Preferir el nombre real (User.name, vía casmarts-webhook-body-mapping) —
+    # el username no siempre tiene forma "nombre.apellido" (p.ej. "lmitchell"),
+    # así que adivinarlo a partir de ahí producía saludos como "Hola Lmitchell"
+    # en vez de "Hola Luis Mitchell" (confirmado en vivo 2026-07-07). Se
+    # conserva el heurístico viejo solo como respaldo para payloads sin
+    # user_name (p.ej. account_deleted, que depende de un snapshot antiguo).
+    user_name_full = payload.get("user_name") or user_username.split('@')[0].replace('.', ' ').title()
 
     link_expiry_minutes = await _get_link_expiry_minutes(db)
 
@@ -542,5 +566,8 @@ async def handle_authentik_event(request: Request, db: AsyncSession = Depends(ge
         log.error("Error enviando correo real (evento Authentik): %s", e)
         raise HTTPException(status_code=502, detail=f"Error SMTP: {str(e)}")
 
-    log.info("Correo real enviado: event=%s user=%s app_slug=%s", event_type, user_username, app_slug)
-    return {"status": "sent", "event_type": event_type, "to": user_email, "app_slug": app_slug}
+    log.info(
+        "Correo real enviado: event=%s user=%s app_slug=%s theme_source=%s logo=%s",
+        event_type, user_username, app_slug, theme_source, "top_present" if theme.logo_top_base64 else "none"
+    )
+    return {"status": "sent", "event_type": event_type, "to": user_email, "app_slug": app_slug, "theme_source": theme_source}

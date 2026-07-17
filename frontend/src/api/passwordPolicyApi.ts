@@ -1,4 +1,5 @@
 import { PasswordPolicy, PasswordPolicyUpdate } from '../types/passwordPolicy';
+import { adminFetch } from './adminFetch';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -11,7 +12,7 @@ const HEADERS = {
 // cookie de sesión HttpOnly (credentials: 'include'), no header estático.
 export const passwordPolicyApi = {
   async get(): Promise<PasswordPolicy> {
-    const response = await fetch(`${API_BASE}/api/v1/password-policy`, {
+    const response = await adminFetch(`${API_BASE}/api/v1/password-policy`, {
       method: 'GET',
       headers: HEADERS,
       credentials: 'include',
@@ -21,7 +22,7 @@ export const passwordPolicyApi = {
   },
 
   async update(patch: PasswordPolicyUpdate): Promise<PasswordPolicy> {
-    const response = await fetch(`${API_BASE}/api/v1/password-policy`, {
+    const response = await adminFetch(`${API_BASE}/api/v1/password-policy`, {
       method: 'PATCH',
       headers: HEADERS,
       credentials: 'include',
@@ -35,7 +36,7 @@ export const passwordPolicyApi = {
   },
 
   async resync(): Promise<PasswordPolicy> {
-    const response = await fetch(`${API_BASE}/api/v1/password-policy/resync`, {
+    const response = await adminFetch(`${API_BASE}/api/v1/password-policy/resync`, {
       method: 'POST',
       headers: HEADERS,
       credentials: 'include',

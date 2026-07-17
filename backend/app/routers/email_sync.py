@@ -50,7 +50,34 @@ _SENTINEL_NOW = "§§AUTHENTIK_NOW§§"
 _DJANGO_NOW_LOCAL = '{% timezone "America/Mexico_City" %}{% now "d/m/Y H:i" %}{% endtimezone %}'
 
 
-def _render_password_reset_for_authentik(theme: TenantTheme, tenant: Tenant) -> str:
+def _build_dynamic_logo_block(all_themes: list[TenantTheme], is_bottom: bool) -> str:
+    conds = []
+    global_logo = None
+    # Deduplicate app slugs to avoid duplicate branches
+    seen_slugs = set()
+    for t in all_themes:
+        logo = t.logo_bottom_base64 if is_bottom else t.logo_top_base64
+        if not logo:
+            continue
+        if t.authentik_app_slug:
+            app_slug = t.authentik_app_slug.lower().strip()
+            if app_slug in seen_slugs:
+                continue
+            seen_slugs.add(app_slug)
+            conds.append(f'{{% elif url and "{app_slug}" in url or "{app_slug}" in user.groups.all|stringformat:"s"|lower or "{app_slug}" in user.username|lower %}}{logo}')
+        else:
+            global_logo = logo
+    
+    if not conds:
+        return global_logo or ""
+    
+    first_cond = conds[0].replace('{% elif', '{% if')
+    rest_conds = "\n".join(conds[1:])
+    default_part = f'{{% else %}}{global_logo or ""}{{% endif %}}'
+    return f"{first_cond}\n{rest_conds}\n{default_part}"
+
+
+def _render_password_reset_for_authentik(theme: TenantTheme, tenant: Tenant, all_themes: list[TenantTheme]) -> str:
     """
     Renderiza el evento password_reset como plantilla Django real para
     desplegar en Authentik. A diferencia de preview_email()/send_test_email(),
@@ -68,18 +95,8 @@ def _render_password_reset_for_authentik(theme: TenantTheme, tenant: Tenant) -> 
     """
     tenant_name = _strip_html_tags(theme.system_name) or theme.display_name or "CASMARTS"
 
-    # Base64 embebido, no logo_url — decisión confirmada 2026-07-02 tras
-    # probar ambas en producción: la URL a settings.PUBLIC_API_BASE_URL (hoy
-    # https://loginmanager.casmart.internal) no carga nunca porque es un
-    # dominio interno inalcanzable desde fuera. El base64 SÍ renderiza en
-    # Outlook una vez que el correo se abre en ventana completa (el panel de
-    # lectura no carga imágenes data: de ningún tipo hasta abrir el correo —
-    # comportamiento normal de Outlook, no un bug). El logo inferior de este
-    # tenant en particular sigue saliendo roto incluso en ventana completa
-    # (posible problema propio de ese archivo — dimensiones/codificación —
-    # no del mecanismo); pendiente que se resuba una versión más simple.
-    logo_base64 = theme.logo_top_base64
-    logo_bottom_base64 = theme.logo_bottom_base64
+    logo_base64 = _build_dynamic_logo_block(all_themes, False)
+    logo_bottom_base64 = _build_dynamic_logo_block(all_themes, True)
 
     env = _build_email_jinja2_env()
     template = env.get_template("password_reset.html.j2")
@@ -140,7 +157,7 @@ def _render_password_reset_for_authentik(theme: TenantTheme, tenant: Tenant) -> 
     return html
 
 
-def _render_email_verification_for_authentik(theme: TenantTheme, tenant: Tenant) -> str:
+def _render_email_verification_for_authentik(theme: TenantTheme, tenant: Tenant, all_themes: list[TenantTheme]) -> str:
     """
     Igual que `_render_password_reset_for_authentik` pero para el
     EmailStage `casmarts-enrollment-verification` (registro, no
@@ -149,10 +166,8 @@ def _render_email_verification_for_authentik(theme: TenantTheme, tenant: Tenant)
     """
     tenant_name = _strip_html_tags(theme.system_name) or theme.display_name or "CASMARTS"
 
-    # Mismo motivo/decisión que en _render_password_reset_for_authentik:
-    # base64 embebido, no logo_url (ver comentario allá para el detalle).
-    logo_base64 = theme.logo_top_base64
-    logo_bottom_base64 = theme.logo_bottom_base64
+    logo_base64 = _build_dynamic_logo_block(all_themes, False)
+    logo_bottom_base64 = _build_dynamic_logo_block(all_themes, True)
 
     env = _build_email_jinja2_env()
     template = env.get_template("email_verification.html.j2")
@@ -251,7 +266,11 @@ async def deploy_email_to_authentik(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant no encontrado para este tema.")
 
-    html = _RENDERERS[event_type](theme, tenant)
+    # Query all active tenant themes to construct the dynamic logo template
+    themes_result = await db.execute(select(TenantTheme).where(TenantTheme.is_active == True))
+    all_themes = list(themes_result.scalars().all())
+
+    html = _RENDERERS[event_type](theme, tenant, all_themes)
 
     output_dir = Path("/shared/authentik/templates/email")
     try:

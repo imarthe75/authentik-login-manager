@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { authApi } from '../api/authApi';
+import { SESSION_EXPIRED_EVENT } from '../api/adminFetch';
 
 export const AdminLoginGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [checking, setChecking] = useState(true);
@@ -7,11 +8,24 @@ export const AdminLoginGate: React.FC<{ children: React.ReactNode }> = ({ childr
   const [adminKey, setAdminKey] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   useEffect(() => {
     authApi.status()
       .then(setAuthenticated)
       .finally(() => setChecking(false));
+  }, []);
+
+  // La sesión de admin vence a las 8h (ver session.py). Sin esto, un 401 a
+  // mitad de sesión se veía como un error genérico ("Failed to save theme")
+  // en el componente que hizo la llamada, en vez de devolver al usuario aquí.
+  useEffect(() => {
+    const handleExpired = () => {
+      setAuthenticated(false);
+      setSessionExpired(true);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -21,6 +35,7 @@ export const AdminLoginGate: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       await authApi.login(adminKey);
       setAuthenticated(true);
+      setSessionExpired(false);
     } catch (err: any) {
       setError(err?.message || 'Error de autenticación');
     } finally {
@@ -43,6 +58,11 @@ export const AdminLoginGate: React.FC<{ children: React.ReactNode }> = ({ childr
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-8 w-full max-w-sm">
           <h1 className="text-lg font-bold text-gray-800 mb-1">Authentik Login Manager</h1>
           <p className="text-xs text-gray-500 mb-4">Acceso administrativo requerido</p>
+          {sessionExpired && (
+            <p className="text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs mb-3">
+              Tu sesión expiró (dura 8 horas). Vuelve a iniciar sesión para continuar.
+            </p>
+          )}
           <input
             type="password"
             autoFocus
