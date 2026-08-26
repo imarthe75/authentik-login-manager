@@ -38,6 +38,7 @@ _AUTHENTIK_EMAIL_STAGES: dict[str, tuple[str, str]] = {
 # interprete como propios — se convierten a tags Django reales al final.
 _SENTINEL_URL = "§§AUTHENTIK_URL§§"
 _SENTINEL_USER = "§§AUTHENTIK_USER§§"
+_SENTINEL_USER_LOGIN = "§§AUTHENTIK_USER_LOGIN§§"
 _SENTINEL_EMAIL = "§§AUTHENTIK_EMAIL§§"
 _SENTINEL_NOW = "§§AUTHENTIK_NOW§§"
 
@@ -115,7 +116,7 @@ def _render_password_reset_for_authentik(theme: TenantTheme, tenant: Tenant, all
 
     current_year = datetime.datetime.now().year
     subs = {
-        "{{usuario_login}}": _SENTINEL_USER,
+        "{{usuario_login}}": _SENTINEL_USER_LOGIN,
         "{{nombre_usuario}}": _SENTINEL_USER,
         "{{fecha_evento}}": _SENTINEL_NOW,
         "{{contacto_soporte}}": "soporte@casmarts.internal",
@@ -145,6 +146,7 @@ def _render_password_reset_for_authentik(theme: TenantTheme, tenant: Tenant, all
 
     html = html.replace(_SENTINEL_URL, "{{ url }}")
     html = html.replace(_SENTINEL_USER, "{{ user.name|default:user.username }}")
+    html = html.replace(_SENTINEL_USER_LOGIN, "{{ user.username }}")
     html = html.replace(_SENTINEL_NOW, _DJANGO_NOW_LOCAL)
 
     # {{ expires|naturaltime }} necesita el tag de carga de Django, igual que
@@ -186,7 +188,7 @@ def _render_email_verification_for_authentik(theme: TenantTheme, tenant: Tenant,
 
     current_year = datetime.datetime.now().year
     subs = {
-        "{{usuario_login}}": _SENTINEL_USER,
+        "{{usuario_login}}": _SENTINEL_USER_LOGIN,
         "{{nombre_usuario}}": _SENTINEL_USER,
         "{{usuario_email}}": _SENTINEL_EMAIL,
         "{{fecha_evento}}": _SENTINEL_NOW,
@@ -207,6 +209,7 @@ def _render_email_verification_for_authentik(theme: TenantTheme, tenant: Tenant,
 
     html = html.replace(_SENTINEL_URL, "{{ url }}")
     html = html.replace(_SENTINEL_USER, "{{ user.name|default:user.username }}")
+    html = html.replace(_SENTINEL_USER_LOGIN, "{{ user.username }}")
     html = html.replace(_SENTINEL_EMAIL, "{{ user.email }}")
     html = html.replace(_SENTINEL_NOW, _DJANGO_NOW_LOCAL)
 

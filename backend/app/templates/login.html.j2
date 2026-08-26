@@ -48,7 +48,8 @@ body {
     --cs-btn-hover:  #244466;
     --cs-panel-bg:   #ffffff;
     --cs-card-bg:    rgba(255, 255, 255, 0.75);
-    --cs-font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --cs-font-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --cs-font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     --cs-error-text: #b1151c;
     --cs-text-primary: #111;
     --cs-text-secondary: #555;
@@ -89,7 +90,7 @@ body {
     display: flex;
     align-items: stretch;
     justify-content: flex-start;
-    font-family: var(--cs-font);
+    font-family: var(--cs-font-body);
     z-index: 2;
     
     /* Estilo de tarjeta única unificada */
@@ -187,6 +188,9 @@ body {
 /* Centro: ambos paneles mantienen 50%/flex:1 — no override */
 
 /* ── TÍTULOS EN TARJETA FORM (siempre visibles) ─────── */
+#cs-form-title, #cs-form-subtitle, .cs-logo-text, .cs-logo-text-bot {
+    font-family: var(--cs-font-heading);
+}
 #cs-form-title {
     font-weight: 800; font-size: 1.8rem; line-height: 1.2;
     color: var(--cs-text-primary) !important;
@@ -762,20 +766,26 @@ function showErrors(root){
         e.style.setProperty('visibility','visible','important');
         e.style.setProperty('opacity','1','important');
     });
-    // REGLA CRÍTICA 2026-07-10: Ocultar "Inicia sesión para continuar a X"
-    // SOLO en la pantalla de login — NUNCA en otras pantallas. Ese mensaje es
-    // redundante con el botón "Iniciar sesión" y ocupa espacio valioso. Solo
-    // aparece cuando entras vía una app (OAuth authorize a SonarQube, Plane…),
-    // NO en el login plano — por eso hay que probarlo con un flujo de app real.
-    // Ese <p> vive DENTRO del shadow root del stage de identificación, así que
-    // hay que consultar en `root` (cada shadow root que recorre scan), NO en
-    // `document` — sino nunca se alcanza. El selector completo
-    // ".pf-c-login__main-body > p" SÍ es válido en element.querySelectorAll
-    // (solo un combinator inicial suelto "> p" es inválido).
-    root.querySelectorAll('.pf-c-login__main-body > p').forEach(function(p){
-        // Solo ocultar EXACTAMENTE ese mensaje (texto trimmeado). No tocar otros
-        // párrafos que podrían ser mensajes de error/ayuda de otras pantallas.
-        if(p.textContent && p.textContent.trim().match(/^Inicia sesión para continuar/i)){
+    // REGLA CRÍTICA 2026-07-10 (revisada 2026-07-28): Ocultar "Inicia sesión para
+    // continuar a X" en la pantalla de login. Ese mensaje es redundante con el botón
+    // "Iniciar sesión" y empujaba el contenido provocando un scroll en la 1ª pantalla.
+    // Solo aparece cuando entras vía una app (OAuth authorize a Starter, Plane…), NO
+    // en el login plano — por eso hay que probarlo con un flujo de app real.
+    //
+    // UBICACIÓN DOM REAL (Authentik 2026.2, verificado en sourcemap NV77J776.js.map):
+    // el <p> se renderiza como `<form class="pf-c-form"> > <p>` DENTRO del shadow root
+    // de <ak-stage-identification> — NO bajo ".pf-c-login__main-body". Por eso el
+    // selector antiguo ".pf-c-login__main-body > p" nunca lo encontraba, y las reglas
+    // CSS `ak-stage-identification p` tampoco (no cruzan ese shadow boundary anidado).
+    //
+    // SEGURIDAD (ver memoria flowhtml-css-recurring-regressions): consultamos TODOS los
+    // <p> del root, pero solo ocultamos los que EMPIEZAN con la frase exacta. Ningún
+    // mensaje de error/éxito/ayuda empieza así, por lo que es imposible que esto bloquee
+    // otros mensajes en esta ni en otras pantallas (a diferencia de un selector CSS
+    // amplio sobre <p>, que ha ocultado texto de error 5 veces).
+    root.querySelectorAll('p').forEach(function(p){
+        var t = p.textContent ? p.textContent.trim() : '';
+        if(t.match(/^Inicia sesión para continuar/i) || t.match(/^Log ?in to continue/i)){
             p.style.setProperty('display','none','important');
             p.style.setProperty('height','0','important');
             p.style.setProperty('padding','0','important');
@@ -905,15 +915,86 @@ new MutationObserver(function(){scan(document);}).observe(document.documentEleme
     const API_BASE  = '/lm';
     const FLOW_SLUG = '{{ flow.slug }}';
     const url       = new URL(window.location.href);
-    const clientId  = url.searchParams.get('client_id') || '';
+    // window.__CASMARTS_APP_HINT__: respaldo cuando la URL no trae client_id
+    // (navegación directa a un dominio dedicado a una app, sin pasar por el
+    // redirect real de OAuth). Lo inyecta el gateway con sub_filter en los
+    // server block de esos dominios; si no está, queda '' y se resuelve el
+    // tema global del flow, como siempre.
+    const clientId  = url.searchParams.get('client_id') || window.__CASMARTS_APP_HINT__ || '';
 
     function cssRgb(hex) {
         const h = hex.replace('#','');
         return `${parseInt(h.slice(0,2),16)}, ${parseInt(h.slice(2,4),16)}, ${parseInt(h.slice(4,6),16)}`;
     }
 
+    // Inyecta el @import/<link> de una Google Font una sola vez (dedupe por
+    // href) — evita pedir la misma hoja de estilos dos veces si heading y
+    // body comparten fuente, y evita bajar fuentes que el tenant no usa
+    // (a diferencia del @import 'Inter' fijo de antes, que siempre cargaba
+    // Inter aunque el tema real usara otra tipografía).
+    function ensureGoogleFontLoaded(importUrl) {
+        if (!importUrl) return;
+        if (document.querySelector(`link[data-cs-font="${importUrl}"]`)) return;
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = importUrl;
+        link.dataset.csFont = importUrl;
+        document.head.appendChild(link);
+    }
+
+    // Fuentes propias por licencia (Gotham/BW Modelica/Corporative Sans Alt,
+    // etc. — ver app/font_presets.py) no vienen de un CDN: se registran vía
+    // @font-face apuntando al archivo que el tenant subió (mismo endpoint de
+    // imágenes base64, pero para fuentes).
+    function ensureCustomFontFace(family, fontUrl) {
+        if (!family || !fontUrl) return;
+        const styleId = `cs-font-face-${family.replace(/[^a-zA-Z0-9]/g, '')}`;
+        if (document.getElementById(styleId)) return;
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `@font-face { font-family: '${family}'; src: url('${fontUrl}'); font-display: swap; }`;
+        document.head.appendChild(style);
+    }
+
+    function applyFonts(t, clientId) {
+        if (t.font_heading_import_url) ensureGoogleFontLoaded(t.font_heading_import_url);
+        if (t.font_body_import_url && t.font_body_import_url !== t.font_heading_import_url) {
+            ensureGoogleFontLoaded(t.font_body_import_url);
+        }
+        if (t.has_custom_font_heading) {
+            const familyName = (t.font_heading_family || '').replace(/^'|'.*$/g, '') || 'CSCustomHeading';
+            ensureCustomFontFace(familyName, `${API_BASE}/api/v1/public/theme/${FLOW_SLUG}/font/custom_font_heading${clientId ? '?app='+clientId : ''}`);
+        }
+        if (t.has_custom_font_body) {
+            const familyName = (t.font_body_family || '').replace(/^'|'.*$/g, '') || 'CSCustomBody';
+            ensureCustomFontFace(familyName, `${API_BASE}/api/v1/public/theme/${FLOW_SLUG}/font/custom_font_body${clientId ? '?app='+clientId : ''}`);
+        }
+        const root = document.documentElement;
+        if (t.font_heading_family) root.style.setProperty('--cs-font-heading', t.font_heading_family);
+        if (t.font_body_family) root.style.setProperty('--cs-font-body', t.font_body_family);
+    }
+
+    // Favicon: el tema GLOBAL de un tenant (sin app) se sirve por el propio
+    // Brand nativo de Authentik (branding_favicon), ya sincronizado al
+    // guardar desde el panel admin — no hace falta tocarlo aquí. Solo un
+    // tema por-APP (clientId presente) necesita este override en runtime,
+    // porque Brand es por dominio y no distingue entre apps de un mismo
+    // dominio.
+    function applyFavicon(t, clientId) {
+        if (!clientId || !t.has_favicon) return;
+        let link = document.querySelector('link[rel~="icon"]');
+        if (!link) {
+            link = document.createElement('link');
+            link.rel = 'icon';
+            document.head.appendChild(link);
+        }
+        link.href = `${API_BASE}/api/v1/public/theme/${FLOW_SLUG}/image/favicon?app=${clientId}`;
+    }
+
     function applyTheme(t) {
         const root = document.documentElement;
+        applyFonts(t, clientId);
+        applyFavicon(t, clientId);
         root.style.setProperty('--cs-btn',       t.primary_color);
         root.style.setProperty('--cs-btn-hover',  t.hover_color);
         root.style.setProperty('--cs-panel-bg',   t.panel_bg_color);
@@ -981,7 +1062,13 @@ new MutationObserver(function(){scan(document);}).observe(document.documentEleme
         } else if (t.logo_top_text) {
             if (topWrap) topWrap.style.display = 'none';
             if (topTextWrap) topTextWrap.style.display = 'flex';
-            if (topTextEl) topTextEl.innerHTML = t.logo_top_text;
+            if (topTextEl) {
+                topTextEl.innerHTML = t.logo_top_text;
+                // .cs-logo-text no tiene !important en su color/font-size — un
+                // inline style normal basta aquí (a diferencia del título/subtítulo).
+                topTextEl.style.color = t.logo_top_text_color || '#FFFFFF';
+                topTextEl.style.fontSize = (t.logo_top_text_size || 24) + 'px';
+            }
         } else {
             if (topWrap) topWrap.style.display = 'none';
             if (topTextWrap) topTextWrap.style.display = 'none';
@@ -999,7 +1086,11 @@ new MutationObserver(function(){scan(document);}).observe(document.documentEleme
         } else if (t.logo_bottom_text) {
             if (botWrap) botWrap.style.display = 'none';
             if (botTextWrap) botTextWrap.style.display = 'flex';
-            if (botTextEl) botTextEl.innerHTML = t.logo_bottom_text;
+            if (botTextEl) {
+                botTextEl.innerHTML = t.logo_bottom_text;
+                botTextEl.style.color = t.logo_bottom_text_color || '#FFFFFF';
+                botTextEl.style.fontSize = (t.logo_bottom_text_size || 20) + 'px';
+            }
         } else {
             if (botWrap) botWrap.style.display = 'none';
             if (botTextWrap) botTextWrap.style.display = 'none';
@@ -1012,11 +1103,26 @@ new MutationObserver(function(){scan(document);}).observe(document.documentEleme
             if (t.privacy_pdf_url) priv.dataset.url = t.privacy_pdf_url;
         }
 
-        /* alineaciones en tarjeta form */
+        /* alineaciones y colores en tarjeta form */
+        // BUG 2026-08-04: #cs-form-title / #cs-form-subtitle tienen
+        // `color: var(--cs-text-primary/secondary) !important` en el CSS (ver
+        // más abajo, valor por defecto con soporte dark-mode). Un inline style
+        // normal (`el.style.color = ...`) SIEMPRE pierde contra una regla de
+        // hoja de estilos marcada !important, sin importar el orden — por eso
+        // el selector de color de título/subtítulo no tenía ningún efecto
+        // visual pese a guardarse y viajar correctamente hasta aquí.
+        // `setProperty(..., 'important')` sí compite en esa capa (misma
+        // "author important", pero el inline style gana por especificidad).
         const fTitle = document.getElementById('cs-form-title');
-        if (fTitle) { fTitle.innerHTML = t.system_name; fTitle.style.textAlign = t.name_align; fTitle.style.display = t.show_system_name !== false ? 'block' : 'none'; }
+        if (fTitle) {
+            fTitle.innerHTML = t.system_name; fTitle.style.textAlign = t.name_align; fTitle.style.display = t.show_system_name !== false ? 'block' : 'none';
+            fTitle.style.setProperty('color', t.system_name_color || '#111827', 'important');
+        }
         const fSub = document.getElementById('cs-form-subtitle');
-        if (fSub) { fSub.innerHTML = t.system_subtitle; fSub.style.textAlign = t.subtitle_align; fSub.style.display = t.show_system_subtitle !== false ? 'block' : 'none'; }
+        if (fSub) {
+            fSub.innerHTML = t.system_subtitle; fSub.style.textAlign = t.subtitle_align; fSub.style.display = t.show_system_subtitle !== false ? 'block' : 'none';
+            fSub.style.setProperty('color', t.system_subtitle_color || '#374151', 'important');
+        }
 
         /* Idioma forzado (forceLocale) - redirección limpia */
         if (t.expansion_config && t.expansion_config.localization && t.expansion_config.localization.forceLocale) {
@@ -1054,6 +1160,7 @@ new MutationObserver(function(){scan(document);}).observe(document.documentEleme
             showForgot: t.show_forgot_password !== false,
             showPasswordToggle: t.show_password_toggle !== false,
             showFieldLabels: t.show_field_labels !== false,
+            fieldLabelColor: t.field_label_color,
             consentStage: t.expansion_config?.consentStage
         });
     }
@@ -1094,6 +1201,7 @@ new MutationObserver(function(){scan(document);}).observe(document.documentEleme
         const showForgot = opts.showForgot !== false;
         const showPasswordToggle = opts.showPasswordToggle !== false;
         const showFieldLabels = opts.showFieldLabels !== false;
+        const fieldLabelColor = opts.fieldLabelColor || '#374151';
         const CSS = `
             /* ── Anular CSS Custom Props en :host para cascada completa ── */
             :host {
@@ -1301,7 +1409,7 @@ new MutationObserver(function(){scan(document);}).observe(document.documentEleme
                 outline: none !important;
             }
             a { color: ${primary} !important; }
-            .pf-c-form__label-text { color: rgba(0,0,0,0.7) !important; font-size: 0.85rem !important; }
+            .pf-c-form__label-text { color: ${fieldLabelColor} !important; font-size: 0.85rem !important; }
             /* ── Visibilidad del mensaje de error de login ──────────────────────
                En este Authentik (2026.2) el error NO es un .pf-c-alert: el stage lo
                renderiza como <p> plano dentro de <ak-empty-state ...><div slot="body">.

@@ -11,6 +11,7 @@ from alembic import context
 from app.database import Base
 from app.models.tenant_theme import TenantTheme  # noqa: F401
 from app.models.email_body import TenantEmailBody  # noqa: F401
+from app.models.tenant_application import TenantApplication  # noqa: F401
 from app.config import settings
 
 # this is the Alembic Config object, which provides access to the values within the .ini file in use.

@@ -8,6 +8,34 @@ body {
   font-family: 'Inter', sans-serif !important;
 }
 
+/* Reskin del propio Manager por tenant — ver TenantContext.tsx (valor por
+   defecto, según hostname) y TenantSelector.tsx (override al elegir a mano
+   qué tenant editar). Alcance deliberadamente acotado a acentos/elementos
+   interactivos (logo del header, botón principal, focus rings) — no un
+   rediseño completo de la paleta gris/layout del panel. */
+:root {
+  --tenant-accent: #4272A5;
+  --tenant-accent-hover: #2d5580;
+}
+
+.tenant-accent-bg {
+  background-color: var(--tenant-accent);
+  transition: background-color 0.2s ease;
+}
+.tenant-accent-bg:hover {
+  background-color: var(--tenant-accent-hover);
+}
+.tenant-accent-text {
+  color: var(--tenant-accent);
+}
+.tenant-accent-border {
+  border-color: var(--tenant-accent);
+}
+.tenant-accent-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--tenant-accent);
+}
+
 @layer utilities {
   .text-shadow {
     text-shadow: 0 2px 4px rgba(0,0,0,0.5);

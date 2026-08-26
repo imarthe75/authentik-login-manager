@@ -104,21 +104,23 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme }) => {
           >
             {theme.show_system_name && (
               <div
-                className="font-extrabold text-3xl leading-none text-gray-900 mb-1.5 font-sans"
-                style={{ textAlign: theme.name_align }}
+                className="font-extrabold text-3xl leading-none mb-1.5 font-sans"
+                style={{ textAlign: theme.name_align, color: theme.system_name_color || '#111827' }}
                 dangerouslySetInnerHTML={{ __html: sanitizedSysName }}
               />
             )}
             {theme.show_system_subtitle && (
-              <div className="text-sm text-gray-700 mb-5 font-sans" style={{ textAlign: theme.subtitle_align }}>
-                {theme.system_subtitle}
-              </div>
+              <div
+                className="text-sm mb-5 font-sans"
+                style={{ textAlign: theme.subtitle_align, color: theme.system_subtitle_color || '#374151' }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(theme.system_subtitle) }}
+              />
             )}
 
             {/* User input */}
             <div className="mb-3 text-left">
               {theme.show_field_labels && (
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5 font-sans">
+                <label className="block text-xs font-semibold mb-1.5 font-sans" style={{ color: theme.field_label_color || '#374151' }}>
                   Usuario / Correo electrónico
                 </label>
               )}
@@ -129,7 +131,7 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme }) => {
             {/* Password input */}
             <div className="mb-3 text-left">
               {theme.show_field_labels && (
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5 font-sans">Contraseña</label>
+                <label className="block text-xs font-semibold mb-1.5 font-sans" style={{ color: theme.field_label_color || '#374151' }}>Contraseña</label>
               )}
               <div className="relative">
                 <input type={showPwd ? 'text' : 'password'} disabled value="supersecretpassword"
@@ -222,8 +224,12 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme }) => {
                 <img src={theme.logo_top_base64} alt="Logo superior"
                   className="max-h-[90px] max-w-[280px] object-contain transition-all" />
               ) : theme.logo_top_text ? (
-                <div className="text-center font-extrabold text-2xl leading-tight text-white select-none"
-                  style={{ textShadow: '0 2px 8px rgba(0,0,0,0.35)' }}
+                <div className="text-center font-extrabold leading-tight select-none"
+                  style={{
+                    textShadow: '0 2px 8px rgba(0,0,0,0.35)',
+                    color: theme.logo_top_text_color || '#FFFFFF',
+                    fontSize: theme.logo_top_text_size ? `${theme.logo_top_text_size}px` : '24px'
+                  }}
                   dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(theme.logo_top_text) }} />
               ) : (
                 <div className="text-center text-white/40 text-xs font-sans italic select-none">Sin logotipo superior</div>
@@ -234,8 +240,12 @@ export const LoginPreview: React.FC<LoginPreviewProps> = ({ theme }) => {
                 <img src={theme.logo_bottom_base64} alt="Logo inferior"
                   className="max-h-[85px] max-w-[280px] object-contain transition-all" />
               ) : theme.logo_bottom_text ? (
-                <div className="text-center font-extrabold text-xl leading-tight text-white select-none"
-                  style={{ textShadow: '0 2px 8px rgba(0,0,0,0.35)' }}
+                <div className="text-center font-extrabold leading-tight select-none"
+                  style={{
+                    textShadow: '0 2px 8px rgba(0,0,0,0.35)',
+                    color: theme.logo_bottom_text_color || '#FFFFFF',
+                    fontSize: theme.logo_bottom_text_size ? `${theme.logo_bottom_text_size}px` : '20px'
+                  }}
                   dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(theme.logo_bottom_text) }} />
               ) : (
                 <div className="text-center text-white/40 text-xs font-sans italic select-none">Sin logotipo inferior</div>

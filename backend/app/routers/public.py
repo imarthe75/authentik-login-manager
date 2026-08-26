@@ -2,8 +2,9 @@ import json
 import base64
 import re
 import logging
+import uuid
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.future import select
 from sqlalchemy import text
@@ -12,6 +13,8 @@ from app.models.tenant_theme import TenantTheme
 from app.schemas.theme import ThemePublic
 from app.cache import cache
 from app.config import settings
+from app.utils.tenant import extract_tenant_id_from_domain, DEFAULT_TENANT_UUID
+from app.font_presets import resolve_public_font_fields
 
 logger = logging.getLogger("authentik_login_manager.public")
 logger.setLevel(logging.INFO)
@@ -28,7 +31,16 @@ authentik_engine = create_async_engine(
 DEFAULT_THEME = {
     "display_name": "CASMARTS",
     "system_name": "CASMARTS<br>Core",
-    "system_subtitle": "Gobierno del estado de México",
+    "system_subtitle": "Autenticación Unificada",
+    "system_name_color": "#111827",
+    "system_subtitle_color": "#374151",
+    "field_label_color": "#374151",
+    "font_heading_family": "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+    "font_body_family": "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+    "font_heading_import_url": "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap",
+    "font_body_import_url": "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap",
+    "has_custom_font_heading": False,
+    "has_custom_font_body": False,
     "layout_position": "left",
     "name_align": "center",
     "subtitle_align": "center",
@@ -53,9 +65,33 @@ DEFAULT_THEME = {
     "has_bg_image": False,
     "logo_top_text": None,
     "logo_bottom_text": None,
+    "logo_top_text_color": "#FFFFFF",
+    "logo_top_text_size": 24,
+    "logo_bottom_text_color": "#FFFFFF",
+    "logo_bottom_text_size": 20,
     "custom_messages": {},
     "expansion_config": {}
 }
+
+async def _resolve_public_tenant_id(request: Request, tenant_id_param: Optional[str], db: AsyncSession) -> str:
+    """
+    Resuelve el tenant para un request público: prioriza un tenant_id
+    explícito (ej. ?tenant_id=... que manda el panel admin al construir
+    logo_url para una vista previa/correo, donde el navegador del ADMIN está
+    en el dominio del propio Manager — loginmanager.casmart.internal — no en
+    el dominio real del tenant, así que la resolución por hostname siempre
+    caía al tenant por defecto). Si no viene, cae al comportamiento de
+    siempre (X-Tenant-Domain / X-Forwarded-Host / host).
+    """
+    if tenant_id_param:
+        try:
+            uuid.UUID(tenant_id_param)
+            return tenant_id_param
+        except ValueError:
+            pass
+    host = request.headers.get("X-Tenant-Domain") or request.headers.get("X-Forwarded-Host") or request.headers.get("host") or ""
+    return await extract_tenant_id_from_domain(host, db)
+
 
 async def resolve_app_slug(app: Optional[str]) -> Optional[str]:
     if not app:
@@ -81,14 +117,19 @@ async def resolve_app_slug(app: Optional[str]) -> Optional[str]:
 @router.get("/theme/{flow_slug}", response_model=ThemePublic)
 async def get_public_theme(
     flow_slug: str,
+    request: Request,
     app: Optional[str] = None,
+    tenant_id: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
     if app:
         app = await resolve_app_slug(app)
-        
-    cache_key = f"theme:{flow_slug}:{app or 'global'}"
-    logger.info(f"Retrieving public theme for flow_slug='{flow_slug}', app='{app or 'global'}'")
+
+    host = request.headers.get("X-Tenant-Domain") or request.headers.get("X-Forwarded-Host") or request.headers.get("host") or ""
+    tenant_id = await _resolve_public_tenant_id(request, tenant_id, db)
+
+    cache_key = f"theme:{tenant_id}:{flow_slug}:{app or 'global'}"
+    logger.info(f"Retrieving public theme for host='{host}', tenant_id='{tenant_id}', flow_slug='{flow_slug}', app='{app or 'global'}'")
     
     # 1. Try to fetch from Valkey Cache first
     cached_data = await cache.get(cache_key)
@@ -102,46 +143,74 @@ async def get_public_theme(
 
     logger.info(f"Cache miss for key '{cache_key}'. Fetching from database...")
 
-    # 2. Check Database - Prioritize application-specific theme if app is provided
+    # 2. Check Database - Prioritize application-specific theme for this tenant
     db_theme = None
     if app:
-        logger.info(f"Querying DB for application-specific theme with authentik_app_slug='{app}' and flow_slug='{flow_slug}'")
+        logger.info(f"Querying DB for application-specific theme with tenant_id='{tenant_id}', authentik_app_slug='{app}', flow_slug='{flow_slug}'")
         stmt = select(TenantTheme).where(
+            TenantTheme.tenant_id == tenant_id,
             TenantTheme.authentik_flow_slug == flow_slug,
             TenantTheme.authentik_app_slug == app
         )
         result = await db.execute(stmt)
-        db_theme = result.scalar_one_or_none()
+        db_theme = result.scalars().first()
         if db_theme:
             logger.info(f"Found database theme specifically for app='{app}' with flow='{flow_slug}' (ID: {db_theme.id})")
 
     if not db_theme:
-        # Fallback: global theme for this flow (app_slug IS NULL — not app-specific)
-        logger.info(f"Querying DB for global flow theme with authentik_flow_slug='{flow_slug}' and no app_slug")
+        # Fallback: global theme for this tenant & flow
+        logger.info(f"Querying DB for global flow theme with tenant_id='{tenant_id}', authentik_flow_slug='{flow_slug}' and no app_slug")
         stmt = select(TenantTheme).where(
+            TenantTheme.tenant_id == tenant_id,
             TenantTheme.authentik_flow_slug == flow_slug,
             TenantTheme.authentik_app_slug.is_(None)
         )
         result = await db.execute(stmt)
-        db_theme = result.scalar_one_or_none()
+        db_theme = result.scalars().first()
         if db_theme:
             logger.info(f"Found global flow theme for flow_slug='{flow_slug}' (ID: {db_theme.id})")
 
-    # Fallback to default-authentication-flow global theme if no theme exists for this flow
+    # Fallback to default-authentication-flow global theme for this tenant if no theme exists for this flow
     if not db_theme and flow_slug != "default-authentication-flow":
         logger.info(f"Querying DB for fallback global theme 'default-authentication-flow' because no theme was found for '{flow_slug}'")
         stmt = select(TenantTheme).where(
+            TenantTheme.tenant_id == tenant_id,
             TenantTheme.authentik_flow_slug == "default-authentication-flow",
             TenantTheme.authentik_app_slug.is_(None)
         )
         result = await db.execute(stmt)
-        db_theme = result.scalar_one_or_none()
+        db_theme = result.scalars().first()
+
+    # Final fallback: if this tenant has no custom themes at all, fall back to
+    # the default tenant's own global theme — explicitly scoped, never "any"
+    # row that happens to match, which would silently serve an unrelated
+    # tenant's design (this is exactly what broke a brand-new tenant's home
+    # page: it fell through to whichever theme the query returned first).
+    if not db_theme:
+        stmt = select(TenantTheme).where(
+            TenantTheme.tenant_id == DEFAULT_TENANT_UUID,
+            TenantTheme.authentik_flow_slug == "default-authentication-flow",
+            TenantTheme.authentik_app_slug.is_(None)
+        )
+        result = await db.execute(stmt)
+        db_theme = result.scalars().first()
 
     if db_theme:
         theme_dict = {
             "display_name": db_theme.display_name,
             "system_name": db_theme.system_name,
             "system_subtitle": db_theme.system_subtitle,
+            "system_name_color": getattr(db_theme, 'system_name_color', '#111827') or '#111827',
+            "system_subtitle_color": getattr(db_theme, 'system_subtitle_color', '#374151') or '#374151',
+            "field_label_color": getattr(db_theme, 'field_label_color', '#374151') or '#374151',
+            **resolve_public_font_fields(
+                getattr(db_theme, 'font_heading', None),
+                getattr(db_theme, 'font_body', None),
+                getattr(db_theme, 'custom_font_heading_name', None),
+                bool(getattr(db_theme, 'custom_font_heading_base64', None)),
+                getattr(db_theme, 'custom_font_body_name', None),
+                bool(getattr(db_theme, 'custom_font_body_base64', None)),
+            ),
             "layout_position": db_theme.layout_position,
             "name_align": db_theme.name_align,
             "subtitle_align": db_theme.subtitle_align,
@@ -164,8 +233,13 @@ async def get_public_theme(
             "has_logo_top": bool(db_theme.logo_top_base64),
             "has_logo_bottom": bool(db_theme.logo_bottom_base64),
             "has_bg_image": bool(db_theme.bg_image_base64),
+            "has_favicon": bool(db_theme.favicon_base64),
             "logo_top_text": db_theme.logo_top_text or None,
             "logo_bottom_text": db_theme.logo_bottom_text or None,
+            "logo_top_text_color": getattr(db_theme, 'logo_top_text_color', '#FFFFFF') or '#FFFFFF',
+            "logo_top_text_size": getattr(db_theme, 'logo_top_text_size', 24) or 24,
+            "logo_bottom_text_color": getattr(db_theme, 'logo_bottom_text_color', '#FFFFFF') or '#FFFFFF',
+            "logo_bottom_text_size": getattr(db_theme, 'logo_bottom_text_size', 20) or 20,
             "allow_self_registration": db_theme.allow_self_registration,
             "show_social_google": db_theme.show_social_google,
             "show_social_microsoft": db_theme.show_social_microsoft,
@@ -197,44 +271,62 @@ async def get_public_theme(
 async def get_theme_image(
     flow_slug: str,
     field: str,
+    request: Request,
     app: Optional[str] = None,
+    tenant_id: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
     if app:
         app = await resolve_app_slug(app)
-        
-    logger.info(f"Retrieving theme image for flow_slug='{flow_slug}', field='{field}', app='{app or 'global'}'")
-    if field not in ["logo_top", "logo_bottom", "bg_image"]:
+
+    tenant_id = await _resolve_public_tenant_id(request, tenant_id, db)
+
+    logger.info(f"Retrieving theme image for tenant_id='{tenant_id}', flow_slug='{flow_slug}', field='{field}', app='{app or 'global'}'")
+    if field not in ["logo_top", "logo_bottom", "bg_image", "favicon"]:
         logger.error(f"Invalid image field requested: '{field}'")
         raise HTTPException(status_code=400, detail="Invalid image field requested.")
 
     db_theme = None
     if app:
-        logger.info(f"Querying DB for theme image with authentik_app_slug='{app}' and flow_slug='{flow_slug}'")
+        logger.info(f"Querying DB for theme image with tenant_id='{tenant_id}', authentik_app_slug='{app}' and flow_slug='{flow_slug}'")
         stmt = select(TenantTheme).where(
+            TenantTheme.tenant_id == tenant_id,
             TenantTheme.authentik_flow_slug == flow_slug,
             TenantTheme.authentik_app_slug == app
         )
         result = await db.execute(stmt)
-        db_theme = result.scalar_one_or_none()
+        db_theme = result.scalars().first()
 
     if not db_theme:
-        logger.info(f"Querying DB for global theme image with authentik_flow_slug='{flow_slug}' and no app_slug")
+        logger.info(f"Querying DB for global theme image with tenant_id='{tenant_id}', authentik_flow_slug='{flow_slug}' and no app_slug")
         stmt = select(TenantTheme).where(
+            TenantTheme.tenant_id == tenant_id,
             TenantTheme.authentik_flow_slug == flow_slug,
             TenantTheme.authentik_app_slug.is_(None)
         )
         result = await db.execute(stmt)
-        db_theme = result.scalar_one_or_none()
+        db_theme = result.scalars().first()
 
     if not db_theme and flow_slug != "default-authentication-flow":
         logger.info(f"Querying DB for fallback global theme image from 'default-authentication-flow' because no theme was found for '{flow_slug}'")
         stmt = select(TenantTheme).where(
+            TenantTheme.tenant_id == tenant_id,
             TenantTheme.authentik_flow_slug == "default-authentication-flow",
             TenantTheme.authentik_app_slug.is_(None)
         )
         result = await db.execute(stmt)
-        db_theme = result.scalar_one_or_none()
+        db_theme = result.scalars().first()
+
+    if not db_theme:
+        # Mismo criterio que get_public_theme: el último recurso es el tema
+        # global del tenant por defecto, explícitamente, no "cualquier" fila.
+        stmt = select(TenantTheme).where(
+            TenantTheme.tenant_id == DEFAULT_TENANT_UUID,
+            TenantTheme.authentik_flow_slug == "default-authentication-flow",
+            TenantTheme.authentik_app_slug.is_(None)
+        )
+        result = await db.execute(stmt)
+        db_theme = result.scalars().first()
 
     if not db_theme:
         logger.warning(f"No custom theme found for flow_slug='{flow_slug}' or app='{app}' (even with fallback). Cannot serve image.")
@@ -271,6 +363,107 @@ async def get_theme_image(
     except Exception as e:
         logger.error(f"Error decoding image for field '{field}': {e}")
         raise HTTPException(status_code=422, detail="Error decoding stored image data.")
+
+@router.get("/theme/{flow_slug}/font/{field}")
+async def get_theme_font(
+    flow_slug: str,
+    field: str,
+    request: Request,
+    app: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Sirve el archivo de fuente propia subido para un tenant (Gotham, BW
+    Modelica, Corporative Sans Alt, etc. — ver app/font_presets.py). Mismo
+    patrón de resolución de tema (app → global flow → default flow →
+    tenant por defecto) y de decodificación de data URI que get_theme_image,
+    con una allowlist de MIME types de fuente en vez de imagen.
+    """
+    if app:
+        app = await resolve_app_slug(app)
+
+    tenant_id = await _resolve_public_tenant_id(request, tenant_id, db)
+
+    if field not in ["custom_font_heading", "custom_font_body"]:
+        raise HTTPException(status_code=400, detail="Invalid font field requested.")
+
+    db_theme = None
+    if app:
+        stmt = select(TenantTheme).where(
+            TenantTheme.tenant_id == tenant_id,
+            TenantTheme.authentik_flow_slug == flow_slug,
+            TenantTheme.authentik_app_slug == app
+        )
+        result = await db.execute(stmt)
+        db_theme = result.scalars().first()
+
+    if not db_theme:
+        stmt = select(TenantTheme).where(
+            TenantTheme.tenant_id == tenant_id,
+            TenantTheme.authentik_flow_slug == flow_slug,
+            TenantTheme.authentik_app_slug.is_(None)
+        )
+        result = await db.execute(stmt)
+        db_theme = result.scalars().first()
+
+    if not db_theme and flow_slug != "default-authentication-flow":
+        stmt = select(TenantTheme).where(
+            TenantTheme.tenant_id == tenant_id,
+            TenantTheme.authentik_flow_slug == "default-authentication-flow",
+            TenantTheme.authentik_app_slug.is_(None)
+        )
+        result = await db.execute(stmt)
+        db_theme = result.scalars().first()
+
+    if not db_theme:
+        stmt = select(TenantTheme).where(
+            TenantTheme.tenant_id == DEFAULT_TENANT_UUID,
+            TenantTheme.authentik_flow_slug == "default-authentication-flow",
+            TenantTheme.authentik_app_slug.is_(None)
+        )
+        result = await db.execute(stmt)
+        db_theme = result.scalars().first()
+
+    if not db_theme:
+        raise HTTPException(status_code=404, detail="Theme or flow slug not found.")
+
+    base64_str = getattr(db_theme, f"{field}_base64", None)
+    if not base64_str:
+        raise HTTPException(status_code=404, detail=f"Font for field '{field}' is not set.")
+
+    ALLOWED_FONT_TYPES = {
+        "font/woff2": "font/woff2",
+        "font/woff": "font/woff",
+        "font/ttf": "font/ttf",
+        "font/otf": "font/otf",
+        "application/font-woff2": "font/woff2",
+        "application/font-woff": "font/woff",
+        "application/x-font-ttf": "font/ttf",
+        "application/x-font-otf": "font/otf",
+        "application/octet-stream": "font/woff2",
+    }
+
+    try:
+        pattern = r"^data:([a-zA-Z0-9\+\-\./]+);base64,(.+)$"
+        match = re.match(pattern, base64_str.strip())
+        if not match:
+            raise HTTPException(status_code=422, detail="Stored font data is not a valid data URI.")
+
+        content_type = match.group(1).lower()
+        resolved_type = ALLOWED_FONT_TYPES.get(content_type)
+        if not resolved_type:
+            raise HTTPException(status_code=422, detail=f"Unsupported font type: {content_type}")
+
+        raw_b64 = match.group(2)
+        font_data = base64.b64decode(raw_b64, validate=True)
+        return Response(content=font_data, media_type=resolved_type)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error decoding font for field '{field}': {e}")
+        raise HTTPException(status_code=422, detail="Error decoding stored font data.")
+
 
 @router.post("/theme/invalidate-cache/{flow_slug}", status_code=status.HTTP_200_OK)
 async def invalidate_cache(flow_slug: str):

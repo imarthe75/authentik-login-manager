@@ -56,8 +56,8 @@ const AppContent: React.FC = () => {
         if (preserveFlowSlug !== undefined) {
           found = data.find(t => t.authentik_flow_slug === preserveFlowSlug && t.authentik_app_slug === preserveAppSlug);
         } else {
-          // Initial load: find general template (default-authentication-flow with app_slug null)
-          found = data.find(t => t.authentik_flow_slug === 'default-authentication-flow' && !t.authentik_app_slug);
+          // Initial load: prefer general template (app_slug null), or first available theme in list
+          found = data.find(t => t.authentik_flow_slug === 'default-authentication-flow' && !t.authentik_app_slug) || data[0];
         }
 
         if (found) {
@@ -75,6 +75,10 @@ const AppContent: React.FC = () => {
           display_name: 'CASMARTS Core Portal',
           system_name: 'CASMARTS<br>Core',
           system_subtitle: 'Gobierno del estado de México',
+          system_name_color: '#111827',
+          system_subtitle_color: '#374151',
+          font_heading: 'inter',
+          font_body: 'inter',
           layout_position: 'left',
           name_align: 'center',
           subtitle_align: 'center',
@@ -158,6 +162,10 @@ const AppContent: React.FC = () => {
       display_name: displayName,
       system_name: 'CASMARTS<br>Core',
       system_subtitle: 'Gobierno del estado de México',
+      system_name_color: '#111827',
+      system_subtitle_color: '#374151',
+      font_heading: 'inter',
+      font_body: 'inter',
       layout_position: 'left',
       name_align: 'center',
       subtitle_align: 'center',
@@ -219,7 +227,7 @@ const AppContent: React.FC = () => {
       {/* Top Navigation Header Bar */}
       <header className="h-16 shrink-0 bg-white border-b border-gray-200 px-6 flex items-center justify-between shadow-sm z-30">
         <div className="flex items-center gap-3">
-          <div style={{ backgroundColor: tenant?.primary_color || '#4272A5' }} className="text-white p-2 rounded-lg font-black text-sm tracking-wider">
+          <div className="tenant-accent-bg text-white p-2 rounded-lg font-black text-sm tracking-wider">
             CA
           </div>
           <div>
@@ -326,6 +334,7 @@ const AppContent: React.FC = () => {
                       activeEventType={activeEmailEvent}
                       onUpdateEmailBody={updateEmailBody}
                       onSelectEvent={setActiveEmailEvent}
+                      tenantId={selectedTenantId}
                     />
                   )}
                 </>
@@ -361,8 +370,10 @@ const AppContent: React.FC = () => {
             onChangeApp={handleChangeApp}
             selectedTenantId={selectedTenantId}
              onSelectTenant={(tenantId) => {
-               setSelectedTenantId(tenantId);
-               fetchThemes(undefined, null, tenantId);
+               const id = tenantId || null;
+               setSelectedTenantId(id);
+               fetchApps(id);
+               fetchThemes(undefined, null, id);
              }}
           />
           </section>

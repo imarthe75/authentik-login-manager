@@ -9,7 +9,16 @@ const DEFAULT_THEME_STATE: Theme = {
   authentik_flow_slug: 'default-authentication-flow',
   display_name: 'CASMARTS Portal',
   system_name: 'CASMARTS<br>Core',
-  system_subtitle: 'Gobierno del estado de México',
+  system_subtitle: 'Autenticación Unificada',
+  system_name_color: '#111827',
+  system_subtitle_color: '#374151',
+  field_label_color: '#374151',
+  font_heading: 'inter',
+  font_body: 'inter',
+  custom_font_heading_base64: null,
+  custom_font_heading_name: null,
+  custom_font_body_base64: null,
+  custom_font_body_name: null,
   layout_position: 'left',
   name_align: 'center',
   subtitle_align: 'center',
@@ -32,6 +41,10 @@ const DEFAULT_THEME_STATE: Theme = {
   logo_bottom_base64: null,
   logo_top_text: null,
   logo_bottom_text: null,
+  logo_top_text_color: '#FFFFFF',
+  logo_top_text_size: 24,
+  logo_bottom_text_color: '#FFFFFF',
+  logo_bottom_text_size: 20,
   privacy_pdf_url: '/static/aviso_privacidad.pdf',
   is_active: true,
   allow_self_registration: false,
@@ -157,7 +170,11 @@ export const useTheme = () => {
     });
 
   const uploadFileField = useCallback(
-    async (key: 'logo_top_base64' | 'logo_bottom_base64' | 'bg_image_base64', file: File) => {
+    async (
+      key: 'logo_top_base64' | 'logo_bottom_base64' | 'bg_image_base64' | 'favicon_base64'
+        | 'custom_font_heading_base64' | 'custom_font_body_base64',
+      file: File
+    ) => {
       try {
         const base64Str = await convertFileToBase64(file);
         updateField(key, base64Str);

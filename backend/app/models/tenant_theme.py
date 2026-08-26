@@ -41,7 +41,13 @@ class TenantTheme(Base):
         String(150), default="CASMARTS<br>Core", nullable=False
     )
     system_subtitle: Mapped[str] = mapped_column(
-        String(255), default="Gobierno del estado de México", nullable=False
+        String(255), default="Autenticación Unificada", nullable=False
+    )
+    system_name_color: Mapped[str] = mapped_column(
+        String(7), default="#111827", server_default="#111827", nullable=False
+    )
+    system_subtitle_color: Mapped[str] = mapped_column(
+        String(7), default="#374151", server_default="#374151", nullable=False
     )
 
     # Disposición y Alineaciones
@@ -113,12 +119,50 @@ class TenantTheme(Base):
     logo_bottom_base64: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )
+    favicon_base64: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
     logo_top_text: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )
     logo_bottom_text: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )
+    logo_top_text_color: Mapped[str] = mapped_column(
+        String(7), default="#FFFFFF", server_default="#FFFFFF", nullable=False
+    )
+    logo_top_text_size: Mapped[int] = mapped_column(
+        Integer, default=24, server_default="24", nullable=False
+    )
+    logo_bottom_text_color: Mapped[str] = mapped_column(
+        String(7), default="#FFFFFF", server_default="#FFFFFF", nullable=False
+    )
+    logo_bottom_text_size: Mapped[int] = mapped_column(
+        Integer, default=20, server_default="20", nullable=False
+    )
+    # Etiquetas de campo ("Correo o Nombre usuario", "Contraseña") — antes
+    # fijas en rgba(0,0,0,0.7) sin importar el tema, por lo que se volvían
+    # ilegibles en tarjetas de fondo oscuro (ver caso centinela-ai).
+    field_label_color: Mapped[str] = mapped_column(
+        String(7), default="#374151", server_default="#374151", nullable=False
+    )
+
+    # Tipografía (heading = system_name/logos, body = formulario/labels).
+    # Keys deben existir en app.font_presets.FONT_PRESETS. Las entradas
+    # *_base64/_name solo se usan cuando el preset elegido es de licencia
+    # propia (requires_upload=True, ej. Gotham/BW Modelica/Corporative Sans
+    # Alt del manual de identidad EdoMex) — no se puede hotlinkear esas
+    # fuentes desde un CDN público.
+    font_heading: Mapped[str] = mapped_column(
+        String(30), default="inter", server_default="inter", nullable=False
+    )
+    font_body: Mapped[str] = mapped_column(
+        String(30), default="inter", server_default="inter", nullable=False
+    )
+    custom_font_heading_base64: Mapped[str | None] = mapped_column(Text, nullable=True)
+    custom_font_heading_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    custom_font_body_base64: Mapped[str | None] = mapped_column(Text, nullable=True)
+    custom_font_body_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Políticas de Privacidad y Estado Activo
     privacy_pdf_url: Mapped[str | None] = mapped_column(

@@ -25,6 +25,7 @@ services:
     volumes:
       - ./backend:/app
       - ../core-casmarts/data/authentik/custom-templates:/shared/authentik/templates
+      - ../core-casmarts/data/authentik/media/public:/shared/authentik/media/public
     networks:
       - aura-network
       - identity-network

@@ -49,6 +49,15 @@ export interface Theme {
   display_name: string;
   system_name: string;
   system_subtitle: string;
+  system_name_color?: string;
+  system_subtitle_color?: string;
+  field_label_color?: string;
+  font_heading: string;
+  font_body: string;
+  custom_font_heading_base64?: string | null;
+  custom_font_heading_name?: string | null;
+  custom_font_body_base64?: string | null;
+  custom_font_body_name?: string | null;
   layout_position: AlignValue;
   name_align: AlignValue;
   subtitle_align: AlignValue;
@@ -69,8 +78,18 @@ export interface Theme {
   logos_height_pct: number | null;
   logo_top_base64: string | null;
   logo_bottom_base64: string | null;
+  favicon_base64?: string | null;
+  // Solo presentes en la respuesta de guardado, y solo cuando el tema es el
+  // GLOBAL del tenant (sin authentik_app_slug): indican si el favicon logró
+  // aplicarse también al Brand nativo de Authentik.
+  favicon_synced_to_authentik?: boolean | null;
+  favicon_sync_error?: string | null;
   logo_top_text: string | null;
   logo_bottom_text: string | null;
+  logo_top_text_color?: string;
+  logo_top_text_size?: number;
+  logo_bottom_text_color?: string;
+  logo_bottom_text_size?: number;
   privacy_pdf_url: string | null;
   is_active: boolean;
   // Access & notifications (new)
@@ -128,3 +147,12 @@ export const EMAIL_EVENT_TYPES: EmailEventType[] = [
 ];
 
 export const EMPTY_EMAIL_BODY: EmailBody = { subject: '', body_html: '' };
+
+/** Entrada de la lista curada de fuentes (GET /api/v1/themes/font-presets). */
+export interface FontPreset {
+  key: string;
+  label: string;
+  css_family: string;
+  google_query: string | null;
+  requires_upload: boolean;
+}

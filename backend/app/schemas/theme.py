@@ -3,8 +3,10 @@ import bleach
 from datetime import datetime
 from typing import Optional, Literal, Dict
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+from app.font_presets import FONT_PRESETS
 
 HEX_COLOR_REGEX = r"^#[0-9a-fA-F]{6}$"
+FONT_KEY_LITERAL = Literal[tuple(FONT_PRESETS.keys())]
 EMAIL_EVENT_TYPE = Literal[
     'password_reset', 'new_account', 'account_lockout',
     'email_verification', 'security_change'
@@ -65,7 +67,12 @@ class ThemeBase(BaseModel):
     """
     display_name: str = Field(..., max_length=150)
     system_name: str = Field("CASMARTS<br>Core", max_length=150)
-    system_subtitle: str = Field("Gobierno del estado de México", max_length=255)
+    system_subtitle: str = Field("Autenticación Unificada", max_length=255)
+    system_name_color: str = Field("#111827", pattern=HEX_COLOR_REGEX)
+    system_subtitle_color: str = Field("#374151", pattern=HEX_COLOR_REGEX)
+    field_label_color: str = Field("#374151", pattern=HEX_COLOR_REGEX)
+    font_heading: FONT_KEY_LITERAL = "inter"
+    font_body: FONT_KEY_LITERAL = "inter"
     layout_position: Literal["left", "center", "right"] = "left"
     name_align: Literal["left", "center", "right"] = "center"
     subtitle_align: Literal["left", "center", "right"] = "center"
@@ -135,8 +142,17 @@ class ThemeCreate(ThemeBase):
     logo_top_base64: Optional[str] = None
     logo_bottom_base64: Optional[str] = None
     bg_image_base64: Optional[str] = None
+    favicon_base64: Optional[str] = None
+    custom_font_heading_base64: Optional[str] = None
+    custom_font_heading_name: Optional[str] = Field(None, max_length=100)
+    custom_font_body_base64: Optional[str] = None
+    custom_font_body_name: Optional[str] = Field(None, max_length=100)
     logo_top_text: Optional[str] = Field(None, max_length=150)
     logo_bottom_text: Optional[str] = Field(None, max_length=150)
+    logo_top_text_color: str = Field("#FFFFFF", pattern=HEX_COLOR_REGEX)
+    logo_top_text_size: int = Field(24, ge=10, le=60)
+    logo_bottom_text_color: str = Field("#FFFFFF", pattern=HEX_COLOR_REGEX)
+    logo_bottom_text_size: int = Field(20, ge=10, le=60)
 
     @field_validator("logo_top_text", "logo_bottom_text", mode="after")
     @classmethod
@@ -153,6 +169,15 @@ class ThemeUpdate(BaseModel):
     display_name: Optional[str] = Field(None, max_length=150)
     system_name: Optional[str] = Field(None, max_length=150)
     system_subtitle: Optional[str] = Field(None, max_length=255)
+    system_name_color: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    system_subtitle_color: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    field_label_color: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    font_heading: Optional[FONT_KEY_LITERAL] = None
+    font_body: Optional[FONT_KEY_LITERAL] = None
+    custom_font_heading_base64: Optional[str] = None
+    custom_font_heading_name: Optional[str] = Field(None, max_length=100)
+    custom_font_body_base64: Optional[str] = None
+    custom_font_body_name: Optional[str] = Field(None, max_length=100)
     layout_position: Optional[Literal["left", "center", "right"]] = None
     name_align: Optional[Literal["left", "center", "right"]] = None
     subtitle_align: Optional[Literal["left", "center", "right"]] = None
@@ -174,8 +199,13 @@ class ThemeUpdate(BaseModel):
     logo_top_base64: Optional[str] = None
     logo_bottom_base64: Optional[str] = None
     bg_image_base64: Optional[str] = None
+    favicon_base64: Optional[str] = None
     logo_top_text: Optional[str] = Field(None, max_length=150)
     logo_bottom_text: Optional[str] = Field(None, max_length=150)
+    logo_top_text_color: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    logo_top_text_size: Optional[int] = Field(None, ge=10, le=60)
+    logo_bottom_text_color: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    logo_bottom_text_size: Optional[int] = Field(None, ge=10, le=60)
     is_active: Optional[bool] = None
     # Access & notifications
     allow_self_registration: Optional[bool] = None
@@ -235,6 +265,11 @@ class ThemeResponse(ThemeBase):
     logo_top_base64: Optional[str] = None
     logo_bottom_base64: Optional[str] = None
     bg_image_base64: Optional[str] = None
+    favicon_base64: Optional[str] = None
+    custom_font_heading_base64: Optional[str] = None
+    custom_font_heading_name: Optional[str] = None
+    custom_font_body_base64: Optional[str] = None
+    custom_font_body_name: Optional[str] = None
     logo_top_text: Optional[str] = Field(None, max_length=150)
     logo_bottom_text: Optional[str] = Field(None, max_length=150)
     created_at: datetime
@@ -253,6 +288,12 @@ class ThemeResponse(ThemeBase):
 
 class ThemeResponseWithEmail(ThemeResponse):
     email_bodies: Dict[str, EmailBodySchema] = {}
+    # Solo se completan cuando el tema guardado es el GLOBAL del tenant
+    # (authentik_app_slug=None) y trae favicon_base64: ese caso empuja el
+    # favicon al Brand nativo de Authentik (por dominio) además de guardarlo
+    # aquí — ver _push_favicon_to_authentik_brand en routers/admin.py.
+    favicon_synced_to_authentik: Optional[bool] = None
+    favicon_sync_error: Optional[str] = None
 
 
 class ThemePublic(BaseModel):
@@ -263,6 +304,15 @@ class ThemePublic(BaseModel):
     display_name: str
     system_name: str
     system_subtitle: str
+    system_name_color: str = "#111827"
+    system_subtitle_color: str = "#374151"
+    field_label_color: str = "#374151"
+    font_heading_family: str = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+    font_body_family: str = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+    font_heading_import_url: Optional[str] = None
+    font_body_import_url: Optional[str] = None
+    has_custom_font_heading: bool = False
+    has_custom_font_body: bool = False
     layout_position: str
     name_align: str
     subtitle_align: str
@@ -285,8 +335,13 @@ class ThemePublic(BaseModel):
     has_logo_top: bool
     has_logo_bottom: bool
     has_bg_image: bool
+    has_favicon: bool = False
     logo_top_text: Optional[str] = Field(None, max_length=150)
     logo_bottom_text: Optional[str] = Field(None, max_length=150)
+    logo_top_text_color: str = "#FFFFFF"
+    logo_top_text_size: int = 24
+    logo_bottom_text_color: str = "#FFFFFF"
+    logo_bottom_text_size: int = 20
     allow_self_registration: bool = False
     show_social_google: bool = False
     show_social_microsoft: bool = False

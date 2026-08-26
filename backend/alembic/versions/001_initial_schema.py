@@ -69,7 +69,7 @@ def upgrade() -> None:
             'default-authentication-flow',
             'CASMARTS Core Portal',
             'CASMARTS<br>Core',
-            'Gobierno del estado de México',
+            'Autenticación Unificada',
             'left',
             'center',
             'center',

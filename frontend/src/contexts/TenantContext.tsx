@@ -25,6 +25,18 @@ export interface TenantContextType {
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
+/**
+ * Aplica los colores de marca del tenant como custom properties CSS sobre
+ * <html> — consumidas por .tenant-accent-* en index.css. Exportada para que
+ * TenantSelector.tsx pueda reusarla cuando el admin elige a mano qué tenant
+ * editar (que puede ser distinto del tenant detectado por hostname aquí).
+ */
+export function applyTenantAccent(primaryColor?: string | null, hoverColor?: string | null): void {
+  const root = document.documentElement;
+  if (primaryColor) root.style.setProperty('--tenant-accent', primaryColor);
+  if (hoverColor) root.style.setProperty('--tenant-accent-hover', hoverColor);
+}
+
 export const TenantProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [tenant, setTenant] = useState<Tenant>(DEFAULT_TENANT);
   const [hostname, setHostname] = useState<string>(window.location.hostname || 'localhost');
@@ -55,6 +67,7 @@ export const TenantProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (response.ok) {
           const data = await response.json();
           setTenant(data);
+          applyTenantAccent(data.primary_color, data.secondary_color);
           setError(null);
         } else {
           setTenant(DEFAULT_TENANT);

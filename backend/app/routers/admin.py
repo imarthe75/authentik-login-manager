@@ -14,7 +14,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, status, Query, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -23,12 +23,13 @@ from app.database import get_db
 from app.config import settings
 from app.models.tenant import Tenant
 from app.models.tenant_theme import TenantTheme
+from app.models.tenant_application import TenantApplication
 from app.models.email_body import TenantEmailBody, EMAIL_EVENT_TYPES
 from app.utils.tenant import extract_tenant_id_from_domain
 from app.utils.session import verify_session_token
 from app.schemas.theme import (
     ThemeCreate, ThemeUpdate, ThemeUpdateWithEmail,
-    ThemeResponse, ThemeResponseWithEmail, EmailBodySchema
+    ThemeResponse, ThemeResponseWithEmail, EmailBodySchema, HEX_COLOR_REGEX
 )
 from app.cache import cache
 
@@ -157,10 +158,91 @@ async def _upsert_email_bodies(
 
 
 def _build_theme_response_with_email(
-    db_theme: TenantTheme, email_bodies: Dict[str, EmailBodySchema]
+    db_theme: TenantTheme,
+    email_bodies: Dict[str, EmailBodySchema],
+    favicon_sync: Optional[tuple[bool, Optional[str]]] = None,
 ) -> ThemeResponseWithEmail:
     data = {c.name: getattr(db_theme, c.name) for c in db_theme.__table__.columns}
-    return ThemeResponseWithEmail(**data, email_bodies=email_bodies)
+    extra = {}
+    if favicon_sync is not None:
+        extra["favicon_synced_to_authentik"], extra["favicon_sync_error"] = favicon_sync
+    return ThemeResponseWithEmail(**data, email_bodies=email_bodies, **extra)
+
+
+# Directorio de media de Authentik, compartido vía volumen Docker con
+# authentik-server/worker (ver ../../compose.yml — mismo patrón que el mount
+# de custom-templates ya existente). Los campos branding_* del Brand nativo
+# de Authentik (branding_favicon, branding_default_flow_background, etc.) son
+# TextField planos: guardan solo el nombre de archivo, resuelto por Authentik
+# relativo a esta carpeta "public/" (confirmado en vivo el 2026-07-07 al
+# arreglar branding_default_flow_background — ver memoria
+# recovery-flow-blank-background-bug).
+_FAVICON_MEDIA_DIR = Path("/shared/authentik/media/public")
+
+_FAVICON_MIME_EXT = {
+    "image/png": "png",
+    "image/x-icon": "ico",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "image/jpeg": "jpg",
+}
+
+
+async def _push_favicon_to_authentik_brand(tenant_id: str, favicon_base64: Optional[str]) -> tuple[bool, Optional[str]]:
+    """
+    Empuja el favicon del tema GLOBAL de un tenant (authentik_app_slug=NULL)
+    al Brand nativo de Authentik (authentik_brands_brand.branding_favicon,
+    por dominio) — así lo sirve el propio base/skeleton.html sin depender de
+    nuestro template. El favicon de un tema por-APP no tiene equivalente
+    nativo (Brand es por dominio, no por app) y sigue solo por el mecanismo
+    de template/JS (ver login.html.j2, función applyFavicon).
+
+    Nunca lanza — devuelve (ok, error) para que el caller persista el cambio
+    local igual aunque Authentik esté inalcanzable (mismo patrón que
+    password_policy._push_to_authentik).
+    """
+    if not favicon_base64:
+        return True, None
+
+    if not settings.AUTHENTIK_API_TOKEN or not settings.AUTHENTIK_HOST:
+        return False, "AUTHENTIK_API_TOKEN/AUTHENTIK_HOST no configurados en .env."
+
+    match = re.match(r"^data:(image/[a-zA-Z0-9\+\-\.]+);base64,(.+)$", favicon_base64.strip())
+    if not match:
+        return False, "El favicon guardado no es un data URI válido."
+
+    content_type = match.group(1).lower()
+    ext = _FAVICON_MIME_EXT.get(content_type)
+    if not ext:
+        return False, f"Tipo de imagen no soportado para favicon de Brand: {content_type}"
+
+    try:
+        image_bytes = base64.b64decode(match.group(2), validate=True)
+    except Exception as e:
+        return False, f"Error decodificando favicon: {e}"
+
+    filename = f"favicon-tenant-{tenant_id}.{ext}"
+    try:
+        _FAVICON_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+        (_FAVICON_MEDIA_DIR / filename).write_bytes(image_bytes)
+    except OSError as e:
+        log.error(f"No se pudo escribir favicon en volumen de media de Authentik: {e}")
+        return False, f"Error escribiendo archivo de favicon: {e}"
+
+    headers = {"Authorization": f"Bearer {settings.AUTHENTIK_API_TOKEN}"}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.patch(
+                f"{settings.AUTHENTIK_HOST}/api/v3/core/brands/{tenant_id}/",
+                headers=headers,
+                json={"branding_favicon": filename},
+            )
+            resp.raise_for_status()
+    except httpx.HTTPError as e:
+        log.error(f"Error empujando branding_favicon a Authentik Brand {tenant_id}: {e}")
+        return False, f"Error al aplicar el favicon en Authentik: {e}"
+
+    return True, None
 
 
 async def _update_authentik_scope_descriptions(expansion_config: Optional[dict]) -> None:
@@ -267,6 +349,130 @@ async def _get_tenant_context(
 
 # ── endpoints ────────────────────────────────────────────────────────────────
 
+# Campos de TenantTheme que se heredan del tema global del tenant
+# (authentik_app_slug=NULL) al auto-registrar el tema de una app nueva.
+# Deliberadamente excluye identidad (tenant_id/flow/app_slug/display_name)
+# y logo_top_text (es el nombre de la app, no una preferencia de marca).
+_INHERITABLE_THEME_FIELDS = [
+    "system_name", "system_subtitle", "system_name_color", "system_subtitle_color",
+    "field_label_color", "layout_position", "name_align", "subtitle_align", "privacy_align",
+    "font_heading", "font_body",
+    "custom_font_heading_base64", "custom_font_heading_name",
+    "custom_font_body_base64", "custom_font_body_name",
+    "primary_color", "hover_color", "card_bg_color", "panel_bg_color",
+    "bg_type", "bg_flat_color", "bg_gradient_from", "bg_gradient_to", "bg_image_base64",
+    "bg_opacity", "form_opacity", "form_height_pct", "logos_opacity", "logos_height_pct",
+    "logo_top_base64", "logo_bottom_base64", "favicon_base64",
+    "logo_top_text_color", "logo_top_text_size", "logo_bottom_text_color", "logo_bottom_text_size",
+    "privacy_pdf_url", "allow_self_registration", "require_email_verification",
+    "show_social_google", "show_social_microsoft", "show_social_gov_id",
+    "show_forgot_password", "show_logos_panel", "show_password_toggle",
+    "show_system_name", "show_system_subtitle", "show_field_labels", "show_app_message",
+    "email_footer_text", "email_template_type",
+]
+
+
+def _brand_slug(name: str) -> str:
+    return (name or "").lower().replace(" ", "-").strip()
+
+
+def _tenant_image_qs(app_slug: Optional[str], tenant_id: Optional[str]) -> str:
+    """
+    Query string para URLs públicas de imagen/fuente (logo_top, etc.)
+    generadas por el panel admin (preview de correo, envío de prueba). Sin
+    tenant_id explícito, esas URLs se resuelven por hostname del REQUEST que
+    las carga — y cuando quien las carga es el navegador del admin en
+    loginmanager.casmart.internal (no el dominio real del tenant), siempre
+    caían al tenant por defecto en vez del tenant que se está editando/previsualizando.
+    """
+    parts = []
+    if app_slug:
+        parts.append(f"app={app_slug}")
+    if tenant_id:
+        parts.append(f"tenant_id={tenant_id}")
+    return f"?{'&'.join(parts)}" if parts else ""
+
+
+async def _fetch_authentik_apps() -> list[dict]:
+    async with authentik_engine.connect() as conn:
+        result = await conn.execute(
+            text("SELECT slug, name FROM authentik_core_application ORDER BY name;")
+        )
+        return [{"slug": row[0], "name": row[1]} for row in result.fetchall()]
+
+
+async def _auto_link_unassigned_applications(db: AsyncSession, apps: Optional[list[dict]] = None) -> None:
+    """
+    Enlaza automáticamente aplicaciones de Authentik a su tenant usando la
+    convención de grupos ya establecida por download_brand_blueprint()
+    ("{brand_name}-{app_slug}", ver más abajo) — reemplaza el filtro por
+    substring de nombre de tenant que había aquí antes (hardcodeaba "teca"/
+    "usana"/"tribunal" y mandaba todo lo demás a un tenant "genérico").
+
+    Solo enlaza cuando encuentra EXACTAMENTE un tenant cuyo grupo de
+    convención existe en Authentik para esa app — si no hay match o hay
+    ambigüedad, la app queda sin asignar (visible en la pestaña
+    Aplicaciones del panel para asignación manual) en vez de adivinar.
+    """
+    if apps is None:
+        apps = await _fetch_authentik_apps()
+    if not apps:
+        return
+
+    tenants_res = await db.execute(select(Tenant).where(Tenant.is_active == True))
+    tenants = tenants_res.scalars().all()
+    if not tenants:
+        return
+
+    linked_res = await db.execute(select(TenantApplication.application_slug))
+    already_linked = {row[0] for row in linked_res.all()}
+
+    unassigned_slugs = [a["slug"] for a in apps if a["slug"] not in already_linked]
+    if not unassigned_slugs:
+        return
+
+    async with authentik_engine.connect() as conn:
+        group_result = await conn.execute(text("SELECT name FROM authentik_core_group;"))
+        group_names_lower = {row[0].lower() for row in group_result.fetchall() if row[0]}
+
+    apps_by_slug = {a["slug"]: a for a in apps}
+
+    for app_slug in unassigned_slugs:
+        candidate_group_names = set()
+        for tenant in tenants:
+            # El blueprint generado hoy usa el nombre crudo de la marca
+            # (con espacios/mayúsculas) como prefijo de grupo, no un slug
+            # (ver download_brand_blueprint) — se acepta ambas convenciones
+            # para no depender de que el admin haya limpiado el nombre.
+            candidate_group_names.add(f"{(tenant.name or '').lower()}-{app_slug}")
+            candidate_group_names.add(f"{_brand_slug(tenant.name)}-{app_slug}")
+
+        matched_tenants = [
+            tenant for tenant in tenants
+            if f"{(tenant.name or '').lower()}-{app_slug}" in group_names_lower
+            or f"{_brand_slug(tenant.name)}-{app_slug}" in group_names_lower
+        ]
+
+        if len(matched_tenants) != 1:
+            continue
+
+        tenant = matched_tenants[0]
+        app_item = apps_by_slug[app_slug]
+        log.info(
+            "Auto-enlazando app '%s' al tenant '%s' vía convención de grupo",
+            app_slug, tenant.name,
+        )
+        db.add(TenantApplication(
+            tenant_id=tenant.id,
+            application_slug=app_slug,
+            application_name=app_item["name"],
+            link_source="group_convention",
+            is_confirmed=True,
+        ))
+
+    await db.commit()
+
+
 @router.get("/authentik/applications", dependencies=[Depends(verify_admin_key)])
 async def list_authentik_applications(
     request: Request,
@@ -279,26 +485,94 @@ async def list_authentik_applications(
             tenant = r.scalar_one_or_none()
         else:
             tenant, _ = await _get_tenant_context(request, db)
-            
-        async with authentik_engine.connect() as conn:
-            result = await conn.execute(
-                text("SELECT slug, name FROM authentik_core_application ORDER BY name;")
-            )
-            apps = [{"slug": row[0], "name": row[1]} for row in result.fetchall()]
-            
+
+        apps = await _fetch_authentik_apps()
         if not tenant:
             return apps
-            
-        domain = (tenant.domain_pattern or "").lower()
-        name = (tenant.name or "").lower()
-        
-        if "usana" in domain or "usana" in name:
-            return [app for app in apps if "usana" in app["slug"].lower() or "usana" in app["name"].lower()]
-        else:
-            return [app for app in apps if "usana" not in app["slug"].lower() and "usana" not in app["name"].lower()]
+
+        await _auto_link_unassigned_applications(db, apps)
+
+        linked_res = await db.execute(
+            select(TenantApplication.application_slug).where(TenantApplication.tenant_id == tenant.id)
+        )
+        linked_slugs = {row[0] for row in linked_res.all()}
+        tenant_apps = [app for app in apps if app["slug"] in linked_slugs]
+
+        # Semilla de branding por defecto para apps nuevas: el tema global
+        # del tenant activo (default-authentication-flow, app_slug=NULL)
+        # es la fuente de verdad de sus colores/logos/textos. Antes había
+        # una rama hardcodeada "if app_slug == 'teca': ... else: colores
+        # de CASMARTS" — no escalaba (cada tenant nuevo requería un
+        # deploy de código) y de hecho fue como terminó existiendo por
+        # accidente una fila "teca" con estos colores fijos dentro del
+        # tenant CASmartS ID, distinta a los colores reales del tenant
+        # TECA (alguien navegó esta lista con el tenant equivocado
+        # seleccionado). Ahora se hereda del propio tema global del
+        # tenant que está activo en este request.
+        global_theme_res = await db.execute(select(TenantTheme).where(
+            TenantTheme.tenant_id == tenant.id,
+            TenantTheme.authentik_flow_slug == "default-authentication-flow",
+            TenantTheme.authentik_app_slug.is_(None)
+        ))
+        tenant_default = global_theme_res.scalar_one_or_none()
+
+        # Auto-registrar temas SOLO para apps ya enlazadas a este tenant
+        # (antes corría para TODAS las apps de Authentik sin importar
+        # dueño, dejando temas huérfanos para apps de otros tenants).
+        for app_item in tenant_apps:
+            app_slug = app_item["slug"]
+            stmt = select(TenantTheme).where(
+                TenantTheme.tenant_id == tenant.id,
+                TenantTheme.authentik_flow_slug == "default-authentication-flow",
+                TenantTheme.authentik_app_slug == app_slug
+            )
+            res = await db.execute(stmt)
+            existing_theme = res.scalar_one_or_none()
+
+            if not existing_theme:
+                log.info(
+                    "Auto-registrando nuevo tema para la aplicación '%s' en Login Manager (tenant '%s')",
+                    app_slug, tenant.name,
+                )
+                if tenant_default:
+                    inherited = {f: getattr(tenant_default, f) for f in _INHERITABLE_THEME_FIELDS}
+                else:
+                    # Tenant sin tema global propio todavía: valores neutros genéricos.
+                    inherited = {
+                        "system_name": "CASMARTS<br>Core",
+                        "system_subtitle": "Autenticación Unificada",
+                        "primary_color": "#4272A5",
+                        "hover_color": "#2d5580",
+                        "bg_gradient_from": "#c8c4bc",
+                        "bg_gradient_to": "#a09890",
+                        "privacy_pdf_url": "/static/aviso_privacidad.pdf",
+                    }
+
+                new_theme = TenantTheme(
+                    tenant_id=tenant.id,
+                    authentik_flow_slug="default-authentication-flow",
+                    authentik_app_slug=app_slug,
+                    display_name=f"Default Authentication Flow - {app_slug}",
+                    logo_top_text=app_item["name"],
+                    is_active=True,
+                    custom_messages={},
+                    expansion_config={},
+                    **inherited,
+                )
+                db.add(new_theme)
+        await db.commit()
+
+        return tenant_apps
     except Exception as e:
         log.error(f"Error listing filtered apps: {e}")
         return []
+
+
+@router.get("/font-presets", dependencies=[Depends(verify_admin_key)])
+async def list_font_presets():
+    """Lista curada de fuentes seleccionables (ConfigPanel del frontend)."""
+    from app.font_presets import FONT_PRESETS
+    return list(FONT_PRESETS.values())
 
 
 @router.get("", response_model=List[ThemeResponse], dependencies=[Depends(verify_admin_key)])
@@ -355,6 +629,12 @@ async def upsert_theme(request: Request, theme_in: ThemeCreate, tenant_id: Optio
 
     await _update_authentik_scope_descriptions(db_theme.expansion_config)
 
+    favicon_sync = None
+    if not db_theme.authentik_app_slug:
+        favicon_sync = await _push_favicon_to_authentik_brand(tenant_id, db_theme.favicon_base64)
+        if not favicon_sync[0]:
+            log.warning("Favicon guardado en DB pero no sincronizado a Authentik Brand: %s", favicon_sync[1])
+
     await cache.delete(f"theme:{db_theme.authentik_flow_slug}:global")
     if db_theme.authentik_app_slug:
         await cache.delete(f"theme:{db_theme.authentik_flow_slug}:{db_theme.authentik_app_slug}")
@@ -367,7 +647,7 @@ async def upsert_theme(request: Request, theme_in: ThemeCreate, tenant_id: Optio
             pass
 
     email_bodies = await _load_email_bodies(db_theme.authentik_flow_slug, tenant_id, db)
-    return _build_theme_response_with_email(db_theme, email_bodies)
+    return _build_theme_response_with_email(db_theme, email_bodies, favicon_sync)
 
 
 def _strip_html_tags(text: str) -> str:
@@ -382,9 +662,10 @@ async def preview_email(
     app_slug: Optional[str] = Query(None),
     username: Optional[str] = Query(None),
     user_email: Optional[str] = Query(None),
+    tenant_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
-    tenant, tenant_id = await _get_tenant_context(request, db)
+    tenant, tenant_id = await _get_tenant_context(request, db, tenant_id)
 
     if event_type not in EMAIL_EVENT_TYPES:
         raise HTTPException(
@@ -435,7 +716,7 @@ async def preview_email(
     # Logos para correos: se prefiere una URL pública (mejor compatibilidad con
     # Outlook, que bloquea/rompe imágenes base64 embebidas) y se cae a base64
     # si por lo que sea la URL pública no resuelve para el destinatario.
-    app_qs = f'?app={app_slug}' if app_slug else ''
+    app_qs = _tenant_image_qs(app_slug, tenant_id)
     logo_url: Optional[str] = None
     logo_base64: Optional[str] = None
 
@@ -523,6 +804,7 @@ async def get_default_email_body(
     flow_slug: str,
     event_type: str,
     app_slug: Optional[str] = Query(None),
+    tenant_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -534,7 +816,7 @@ async def get_default_email_body(
     if event_type not in EMAIL_EVENT_TYPES:
         raise HTTPException(status_code=422, detail=f"Invalid event_type. Must be one of: {sorted(EMAIL_EVENT_TYPES)}")
 
-    tenant, tenant_id = await _get_tenant_context(request, db)
+    tenant, tenant_id = await _get_tenant_context(request, db, tenant_id)
 
     theme = None
     if app_slug:
@@ -769,9 +1051,10 @@ async def send_test_email(
     request: Request,
     flow_slug: str,
     body: TestEmailRequest,
+    tenant_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
-    tenant, tenant_id = await _get_tenant_context(request, db)
+    tenant, tenant_id = await _get_tenant_context(request, db, tenant_id)
 
     if body.event_type not in EMAIL_EVENT_TYPES:
         raise HTTPException(status_code=422, detail=f"event_type inválido: {body.event_type}")
@@ -809,7 +1092,7 @@ async def send_test_email(
 
     # Logo superior: URL pública (se adjunta inline vía CID en _send_smtp) +
     # base64 como respaldo si el render/preview no pasa por _send_smtp.
-    app_qs = f'?app={body.app_slug}' if body.app_slug else ''
+    app_qs = _tenant_image_qs(body.app_slug, tenant_id)
     logo_bytes, logo_mime = b'', 'image/png'
     logo_base64: Optional[str] = None
     logo_url: Optional[str] = None
@@ -1148,9 +1431,10 @@ async def get_theme(
     request: Request,
     flow_slug: str,
     app_slug: Optional[str] = Query(None),
+    tenant_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
-    tenant, tenant_id = await _get_tenant_context(request, db)
+    tenant, tenant_id = await _get_tenant_context(request, db, tenant_id)
 
     if app_slug:
         stmt = select(TenantTheme).where(
@@ -1178,9 +1462,10 @@ async def patch_theme(
     request: Request,
     flow_slug: str,
     theme_in: ThemeUpdateWithEmail,
+    tenant_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
-    tenant, tenant_id = await _get_tenant_context(request, db)
+    tenant, tenant_id = await _get_tenant_context(request, db, tenant_id)
 
     stmt = select(TenantTheme).where(
         TenantTheme.tenant_id == tenant_id,
@@ -1206,6 +1491,12 @@ async def patch_theme(
     await db.commit()
     await db.refresh(db_theme)
 
+    favicon_sync = None
+    if "favicon_base64" in update_data and not db_theme.authentik_app_slug:
+        favicon_sync = await _push_favicon_to_authentik_brand(tenant_id, db_theme.favicon_base64)
+        if not favicon_sync[0]:
+            log.warning("Favicon guardado en DB pero no sincronizado a Authentik Brand: %s", favicon_sync[1])
+
     await cache.delete(f"theme:{flow_slug}")
     if cache.redis:
         try:
@@ -1216,12 +1507,12 @@ async def patch_theme(
             pass
 
     email_bodies = await _load_email_bodies(flow_slug, tenant_id, db)
-    return _build_theme_response_with_email(db_theme, email_bodies)
+    return _build_theme_response_with_email(db_theme, email_bodies, favicon_sync)
 
 
 @router.delete("/{flow_slug}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(verify_admin_key)])
-async def delete_theme(request: Request, flow_slug: str, db: AsyncSession = Depends(get_db)):
-    tenant, tenant_id = await _get_tenant_context(request, db)
+async def delete_theme(request: Request, flow_slug: str, tenant_id: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)):
+    tenant, tenant_id = await _get_tenant_context(request, db, tenant_id)
 
     stmt = select(TenantTheme).where(
         TenantTheme.tenant_id == tenant_id,
@@ -1259,11 +1550,18 @@ _DEFAULT_THEME = SimpleNamespace(
     subtitle_align='center',
     privacy_align='center',
     system_name='CASMARTS<br>Core',
-    system_subtitle='Portal Institucional',
+    system_subtitle='Autenticación Unificada',
+    system_name_color='#111827',
+    system_subtitle_color='#374151',
+    field_label_color='#374151',
     logo_top_base64=None,
     logo_bottom_base64=None,
     logo_top_text=None,
     logo_bottom_text=None,
+    logo_top_text_color='#FFFFFF',
+    logo_top_text_size=24,
+    logo_bottom_text_color='#FFFFFF',
+    logo_bottom_text_size=20,
     privacy_pdf_url=None,
     display_name='CASMARTS',
     allow_self_registration=False,
@@ -1412,9 +1710,13 @@ async def _sync_password_toggle(flow_slug: str, allow_show_password: bool) -> tu
 
 
 @router.post("/{flow_slug}/deploy", dependencies=[Depends(verify_admin_key)])
-async def deploy_theme(flow_slug: str, db: AsyncSession = Depends(get_db)):
+async def deploy_theme(request: Request, flow_slug: str, tenant_id: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)):
+    tenant, tenant_id = await _get_tenant_context(request, db, tenant_id)
     result = await db.execute(
-        select(TenantTheme).where(TenantTheme.authentik_flow_slug == flow_slug)
+        select(TenantTheme).where(
+            TenantTheme.tenant_id == tenant_id,
+            TenantTheme.authentik_flow_slug == flow_slug
+        )
     )
     themes: list[TenantTheme] = result.scalars().all()
     if not themes:
@@ -1512,8 +1814,28 @@ async def resolve_tenant(
         }
 
 
+class BrandPaletteSwatch(BaseModel):
+    name: str = Field(..., max_length=80)
+    color: str = Field(..., pattern=HEX_COLOR_REGEX)
+    hover: str = Field(..., pattern=HEX_COLOR_REGEX)
+
+
 class TenantSettingsUpdate(BaseModel):
     default_app_url: Optional[str] = None
+    # Columnas reales de Tenant (no vivían en config) — accento del propio
+    # Manager (ver applyTenantAccent en TenantContext.tsx/TenantSelector.tsx)
+    # y swatches "Actual:" del selector de tenant.
+    primary_color: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    secondary_color: Optional[str] = Field(None, pattern=HEX_COLOR_REGEX)
+    # Swatches de botón sugeridos en el selector rápido de color (ver
+    # ConfigPanel.tsx "Color del botón"). Antes de esto, ese selector
+    # decidía qué paleta ofrecer adivinando por substring ("teca" en
+    # display_name/system_name/app_slug del TEMA que se estaba editando en
+    # ese momento) — cualquier tenant que tuviera "teca" en el nombre de su
+    # sistema recibía sin querer las swatches Pantone oficiales de otro
+    # tenant (Tribunal Estatal de Conciliación y Arbitraje). Ahora es un
+    # dato real por tenant (aquí), no una adivinanza sobre texto libre.
+    brand_palette: Optional[List[BrandPaletteSwatch]] = None
 
     @field_validator('default_app_url', mode='after')
     @classmethod
@@ -1527,29 +1849,159 @@ class TenantSettingsUpdate(BaseModel):
 
 
 @tenant_router.get("/settings", dependencies=[Depends(verify_admin_key)])
-async def get_tenant_settings(request: Request, db: AsyncSession = Depends(get_db)):
+async def get_tenant_settings(
+    request: Request,
+    tenant_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
     """
     Configuración a nivel tenant (no por tema/app) editable desde Vista
-    General del designer — hoy solo default_app_url (a dónde se manda a un
-    usuario no-admin que llega a /if/user/ sin una app específica en mente,
-    ver custom_authentik.js).
+    General del designer — default_app_url (a dónde se manda a un usuario
+    no-admin que llega a /if/user/ sin una app específica en mente, ver
+    custom_authentik.js), primary_color/secondary_color (acento del propio
+    Manager) y brand_palette (swatches sugeridas del selector rápido de
+    color). tenant_id explícito es obligatorio en la práctica: sin él, la
+    resolución por hostname ve al ADMIN navegando desde el dominio del
+    propio Manager (no el del tenant que está editando) y siempre cae al
+    tenant por defecto — mismo bug que tenía el logo de la vista de correo.
     """
-    tenant, _ = await _get_tenant_context(request, db)
-    return {"default_app_url": (tenant.config or {}).get("default_app_url")}
+    tenant, _ = await _get_tenant_context(request, db, tenant_id)
+    config = tenant.config or {}
+    return {
+        "default_app_url": config.get("default_app_url"),
+        "brand_palette": config.get("brand_palette"),
+        "primary_color": tenant.primary_color,
+        "secondary_color": tenant.secondary_color,
+    }
 
 
 @tenant_router.patch("/settings", dependencies=[Depends(verify_admin_key)])
 async def update_tenant_settings(
     request: Request,
     body: TenantSettingsUpdate,
+    tenant_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    tenant, _ = await _get_tenant_context(request, db)
+    tenant, _ = await _get_tenant_context(request, db, tenant_id)
     new_config = dict(tenant.config or {})
-    new_config["default_app_url"] = body.default_app_url
+    # Solo toca las claves que realmente vinieron en el PATCH — un PATCH que
+    # solo manda brand_palette no debe borrar default_app_url (y viceversa).
+    provided = body.model_dump(exclude_unset=True)
+    if 'default_app_url' in provided:
+        new_config["default_app_url"] = body.default_app_url
+    if 'brand_palette' in provided:
+        new_config["brand_palette"] = (
+            [s.model_dump() for s in body.brand_palette] if body.brand_palette else None
+        )
     tenant.config = new_config
+    if 'primary_color' in provided and body.primary_color:
+        tenant.primary_color = body.primary_color
+    if 'secondary_color' in provided and body.secondary_color:
+        tenant.secondary_color = body.secondary_color
     await db.commit()
-    return {"default_app_url": tenant.config.get("default_app_url")}
+    return {
+        "default_app_url": tenant.config.get("default_app_url"),
+        "brand_palette": tenant.config.get("brand_palette"),
+        "primary_color": tenant.primary_color,
+        "secondary_color": tenant.secondary_color,
+    }
+
+
+class TenantApplicationCreate(BaseModel):
+    tenant_id: str
+    application_slug: str = Field(..., max_length=100)
+    application_name: Optional[str] = Field(None, max_length=255)
+
+
+@tenant_router.get("/applications", dependencies=[Depends(verify_admin_key)])
+async def list_tenant_applications(
+    tenant_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Pestaña "Aplicaciones" del panel: enlaces confirmados (por tenant si se
+    filtra) + apps de Authentik que no tienen ningún tenant asignado todavía
+    (ni por convención de grupo ni a mano) — ver
+    _auto_link_unassigned_applications.
+    """
+    await _auto_link_unassigned_applications(db)
+
+    stmt = select(TenantApplication)
+    if tenant_id:
+        stmt = stmt.where(TenantApplication.tenant_id == tenant_id)
+    linked_res = await db.execute(stmt.order_by(TenantApplication.application_slug))
+    linked = linked_res.scalars().all()
+
+    all_apps = await _fetch_authentik_apps()
+    linked_slugs_res = await db.execute(select(TenantApplication.application_slug).distinct())
+    linked_slugs = {row[0] for row in linked_slugs_res.all()}
+    unassigned = [a for a in all_apps if a["slug"] not in linked_slugs]
+
+    return {
+        "linked": [
+            {
+                "id": str(t.id), "tenant_id": str(t.tenant_id),
+                "application_slug": t.application_slug, "application_name": t.application_name,
+                "link_source": t.link_source, "is_confirmed": t.is_confirmed,
+            }
+            for t in linked
+        ],
+        "unassigned": unassigned,
+    }
+
+
+@tenant_router.post("/applications", dependencies=[Depends(verify_admin_key)])
+async def create_tenant_application(
+    body: TenantApplicationCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        tenant_uuid = uuid.UUID(body.tenant_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="tenant_id inválido")
+
+    tenant_res = await db.execute(select(Tenant).where(Tenant.id == tenant_uuid))
+    if not tenant_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Tenant no encontrado")
+
+    existing_res = await db.execute(select(TenantApplication).where(
+        TenantApplication.tenant_id == tenant_uuid,
+        TenantApplication.application_slug == body.application_slug,
+    ))
+    if existing_res.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Esta aplicación ya está enlazada a este tenant")
+
+    link = TenantApplication(
+        tenant_id=tenant_uuid,
+        application_slug=body.application_slug,
+        application_name=body.application_name or body.application_slug,
+        link_source="manual",
+        is_confirmed=True,
+    )
+    db.add(link)
+    await db.commit()
+    await db.refresh(link)
+    return {
+        "id": str(link.id), "tenant_id": str(link.tenant_id),
+        "application_slug": link.application_slug, "application_name": link.application_name,
+        "link_source": link.link_source, "is_confirmed": link.is_confirmed,
+    }
+
+
+@tenant_router.delete("/applications/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(verify_admin_key)])
+async def delete_tenant_application(link_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        link_uuid = uuid.UUID(link_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="link_id inválido")
+
+    res = await db.execute(select(TenantApplication).where(TenantApplication.id == link_uuid))
+    link = res.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404, detail="Enlace no encontrado")
+
+    await db.delete(link)
+    await db.commit()
 
 
 async def _sync_tenants_from_authentik(db: AsyncSession) -> None:
@@ -1625,6 +2077,7 @@ async def list_available_tenants(db: AsyncSession = Depends(get_db)):
                 "domain_pattern": tenant.domain_pattern,
                 "primary_color": tenant.primary_color,
                 "secondary_color": tenant.secondary_color,
+                "brand_palette": (tenant.config or {}).get("brand_palette"),
             }
             for tenant in tenants
         ]
@@ -1636,17 +2089,21 @@ async def list_available_tenants(db: AsyncSession = Depends(get_db)):
         )
 
 
-@router.get("/blueprint/download")
-async def download_brand_blueprint(
-    brand_name: str = Query(..., description="Nombre de la marca/brand"),
-    domain: str = Query(..., description="Dominio de la marca")
-):
-    """
-    Genera y descarga un Blueprint de Authentik para inicializar una nueva marca,
-    aprovisionar sus dominios y la estructura de grupos de usuarios inicial.
-    """
-    brand_slug = brand_name.lower().replace(" ", "-").strip()
-    yaml_content = f"""version: 1
+# brand_name/domain se interpolan directo en un YAML de blueprint que puede
+# terminar aplicándose contra Authentik (ver apply_brand_blueprint) — sin
+# esta allowlist, un nombre con salto de línea/dos-puntos podría inyectar
+# entradas de blueprint arbitrarias (ej. otro `model:` con is_superuser).
+_BLUEPRINT_NAME_RE = re.compile(r"^[A-Za-z0-9 ._\-]{1,150}$")
+_BLUEPRINT_DOMAIN_RE = re.compile(r"^[A-Za-z0-9.\-]{1,255}$")
+
+
+def _build_brand_blueprint_yaml(brand_name: str, domain: str) -> str:
+    if not _BLUEPRINT_NAME_RE.match(brand_name):
+        raise HTTPException(status_code=422, detail="brand_name solo admite letras, números, espacios, puntos y guiones")
+    if not _BLUEPRINT_DOMAIN_RE.match(domain):
+        raise HTTPException(status_code=422, detail="domain solo admite letras, números, puntos y guiones")
+
+    return f"""version: 1
 metadata:
   name: Aprovisionamiento de Marca - {brand_name}
 entries:
@@ -1659,7 +2116,7 @@ entries:
       domain: {domain}
       is_default: false
       branding_title: {brand_name} ID
-      
+
   # 2. Crear Grupo Padre de la Marca (para usuarios de este dominio)
   - identifiers:
       name: {brand_name}-users
@@ -1683,6 +2140,19 @@ entries:
       name: {brand_name}-plane
       parent: !Find [authentik_core.group, [name, {brand_name}-users]]
 """
+
+
+@router.get("/blueprint/download")
+async def download_brand_blueprint(
+    brand_name: str = Query(..., description="Nombre de la marca/brand"),
+    domain: str = Query(..., description="Dominio de la marca")
+):
+    """
+    Genera y descarga un Blueprint de Authentik para inicializar una nueva marca,
+    aprovisionar sus dominios y la estructura de grupos de usuarios inicial.
+    """
+    brand_slug = brand_name.lower().replace(" ", "-").strip()
+    yaml_content = _build_brand_blueprint_yaml(brand_name, domain)
     from fastapi.responses import Response
     return Response(
         content=yaml_content,
@@ -1691,3 +2161,82 @@ entries:
             "Content-Disposition": f"attachment; filename=blueprint-brand-{brand_slug}.yaml"
         }
     )
+
+
+@router.post("/blueprint/apply", dependencies=[Depends(verify_admin_key)])
+async def apply_brand_blueprint(
+    brand_name: str = Query(..., description="Nombre de la marca/brand"),
+    domain: str = Query(..., description="Dominio de la marca"),
+):
+    """
+    Aplica el mismo Blueprint que download_brand_blueprint genera, pero
+    directo contra la API de Authentik (BlueprintInstance con contenido
+    inline) en vez de exigir descargar el YAML y aplicarlo a mano — cierra
+    el paso manual que hoy obliga a pedirle a alguien más que termine el
+    alta de una marca nueva.
+
+    Best-effort: Authentik puede devolver 200/201 y aun así no aplicar nada
+    realmente (ver gotcha #8 en memoria "authentik-blueprint-gotchas" — no
+    confiar en un exit code/status silencioso). Se dispara /apply/ explícito
+    después de crear el BlueprintInstance y se reporta lo que Authentik
+    contesta, pero la verificación final (¿existe ya la Brand?) sigue
+    siendo responsabilidad de quien lo use — igual que con `ak apply_blueprint`.
+    """
+    if not settings.AUTHENTIK_API_TOKEN or not settings.AUTHENTIK_HOST:
+        raise HTTPException(
+            status_code=503,
+            detail="AUTHENTIK_API_TOKEN/AUTHENTIK_HOST no configurados en este entorno.",
+        )
+
+    yaml_content = _build_brand_blueprint_yaml(brand_name, domain)
+    headers = {"Authorization": f"Bearer {settings.AUTHENTIK_API_TOKEN}"}
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        try:
+            create_resp = await client.post(
+                f"{settings.AUTHENTIK_HOST}/api/v3/managed/blueprints/",
+                headers=headers,
+                json={
+                    "name": f"Aprovisionamiento de Marca - {brand_name}",
+                    "content": yaml_content,
+                    "enabled": True,
+                },
+            )
+        except httpx.HTTPError as e:
+            log.error("Error de red aplicando blueprint de marca '%s': %s", brand_name, e)
+            raise HTTPException(status_code=502, detail=f"No se pudo contactar a Authentik: {e}")
+
+    if create_resp.status_code not in (200, 201):
+        log.error(
+            "Authentik rechazó el blueprint de marca '%s': %s %s",
+            brand_name, create_resp.status_code, create_resp.text[:500],
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=f"Authentik rechazó el blueprint ({create_resp.status_code}): {create_resp.text[:300]}",
+        )
+
+    instance = create_resp.json()
+    instance_pk = instance.get("pk") or instance.get("instance_uuid")
+    apply_status = None
+    if instance_pk:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            try:
+                apply_resp = await client.post(
+                    f"{settings.AUTHENTIK_HOST}/api/v3/managed/blueprints/{instance_pk}/apply/",
+                    headers=headers,
+                )
+                apply_status = apply_resp.status_code
+            except httpx.HTTPError as e:
+                log.warning("BlueprintInstance '%s' creado pero /apply/ explícito falló: %s", instance_pk, e)
+
+    log.info(
+        "Blueprint de marca '%s' (dominio '%s') enviado a Authentik — instance_pk=%s apply_status=%s",
+        brand_name, domain, instance_pk, apply_status,
+    )
+    return {
+        "status": "submitted",
+        "blueprint_instance_pk": instance_pk,
+        "apply_status": apply_status,
+        "note": "Verifica en Authentik (Admin > Marcas) que la marca y sus grupos se hayan creado.",
+    }

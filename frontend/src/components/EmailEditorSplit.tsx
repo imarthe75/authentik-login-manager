@@ -41,6 +41,7 @@ interface EmailEditorSplitProps {
   activeEventType: string;
   onUpdateEmailBody: (eventType: string, body: EmailBody) => void;
   onSelectEvent: (eventType: string) => void;
+  tenantId: string | null;
 }
 
 const EMAIL_EVENT_META: Record<string, { icon: string; desc: string; badgeClass: string }> = {
@@ -149,6 +150,7 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
   activeEventType,
   onUpdateEmailBody,
   onSelectEvent,
+  tenantId,
 }) => {
   const savedBody: EmailBody = theme.email_bodies?.[activeEventType as EmailEventType] ?? { ...EMPTY_EMAIL_BODY };
   const [renderedHtml, setRenderedHtml] = useState<string>('');
@@ -200,7 +202,8 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
       const html = await themesApi.getEmailPreview(
         theme.authentik_flow_slug,
         activeEventType,
-        theme.authentik_app_slug
+        theme.authentik_app_slug,
+        tenantId
       );
       setRenderedHtml(html);
     } catch (err) {
@@ -219,7 +222,8 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
         const data = await themesApi.getDefaultEmailBody(
           theme.authentik_flow_slug,
           activeEventType,
-          theme.authentik_app_slug
+          theme.authentik_app_slug,
+          tenantId
         );
         setDefaultBody({ subject: data.subject, body_html: data.body_html });
       } catch (err) {
@@ -230,7 +234,7 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
     setIsLive(false); // al cambiar de evento, siempre partir del estado guardado real
     loadPreview();
     loadDefaultBody();
-  }, [activeEventType, theme.authentik_flow_slug, theme.authentik_app_slug]);
+  }, [activeEventType, theme.authentik_flow_slug, theme.authentik_app_slug, tenantId]);
 
   // Cleanup del debounce del preview en vivo al desmontar.
   useEffect(() => {
@@ -277,6 +281,7 @@ export const EmailEditorSplit: React.FC<EmailEditorSplitProps> = ({
         trimmed,
         theme.authentik_app_slug ?? undefined,
         testDisplayName.trim() || undefined,
+        tenantId,
       );
       setTestStatus({ ok: true, msg: `✅ Enviado a ${trimmed}` });
     } catch (err: any) {

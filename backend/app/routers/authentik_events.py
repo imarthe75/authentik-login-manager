@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 import secrets
@@ -14,13 +15,17 @@ from app.config import settings
 from app.database import get_db
 from app.models.email_body import TenantEmailBody
 from app.models.tenant import Tenant
+from app.models.tenant_application import TenantApplication
 from app.models.tenant_theme import TenantTheme
+from app.utils.tenant import DEFAULT_TENANT_UUID
 from app.routers.admin import (
+    _auto_link_unassigned_applications,
     _b64_to_bytes,
     _format_link_expiry_text,
     _get_link_expiry_minutes,
     _send_smtp,
     _strip_html_tags,
+    _sync_tenants_from_authentik,
     authentik_engine,
     render_event_email_html,
 )
@@ -60,8 +65,27 @@ _EVENT_NOTIFY_COOLDOWN_SECONDS: dict[str, int] = {
     "app_authorized": 30 * 24 * 60 * 60,
 }
 
-# app_slugs con grupo de Authentik dedicado (ver Parte 1.5 / casmarts-app-enrollment.yaml).
-KNOWN_APP_SLUGS = {"starter", "consulta-smart", "idp-smart", "centinela-ai", "kiwi", "plane"}
+_KNOWN_APP_SLUGS_CACHE_KEY = "known_app_slugs:v1"
+_KNOWN_APP_SLUGS_CACHE_TTL = 300  # 5 min — mismo orden que el resto del cache de tenant/tema
+
+
+async def _get_known_app_slugs(db: AsyncSession) -> set[str]:
+    """
+    app_slugs reconocidos para resolución de branding por grupo (ver
+    _resolve_app_slug_from_groups). Antes era un set hardcodeado en código
+    (KNOWN_APP_SLUGS) que había que editar y redeployar cada vez que se
+    daba de alta una app nueva — ahora se deriva de tenant_applications
+    (fuente de verdad app↔tenant, ver admin.py:_auto_link_unassigned_applications),
+    cacheado brevemente en Valkey para no pegarle a Postgres en cada evento.
+    """
+    cached = await cache.get(_KNOWN_APP_SLUGS_CACHE_KEY)
+    if cached is not None:
+        return set(json.loads(cached))
+
+    result = await db.execute(select(TenantApplication.application_slug).distinct())
+    slugs = {row[0] for row in result.all()}
+    await cache.set(_KNOWN_APP_SLUGS_CACHE_KEY, json.dumps(sorted(slugs)), ex=_KNOWN_APP_SLUGS_CACHE_TTL)
+    return slugs
 
 _FLOW_SLUG = "default-authentication-flow"
 
@@ -150,7 +174,7 @@ async def _resolve_app_from_pk(app_pk: str) -> tuple[str | None, str | None]:
     return (row[0] or "").lower() or None, row[1]
 
 
-async def _resolve_app_slug_from_groups(user_username: str) -> str | None:
+async def _resolve_app_slug_from_groups(user_username: str, db: AsyncSession) -> str | None:
     """Fallback: resuelve a qué aplicación pertenece el usuario vía sus
     grupos reales de Authentik (Parte 1.5) — usado solo cuando el evento no
     trae oauth_client_id (p. ej. un admin cambiando la password de alguien
@@ -175,7 +199,8 @@ async def _resolve_app_slug_from_groups(user_username: str) -> str | None:
             # capitalizado) debe resolver al app_slug 'starter' (minúsculas,
             # como está en TenantTheme.authentik_app_slug).
             group_names_lower = {g["name"].lower() for g in results[0].get("groups_obj", [])}
-            matched = sorted(group_names_lower & KNOWN_APP_SLUGS)
+            known_app_slugs = await _get_known_app_slugs(db)
+            matched = sorted(group_names_lower & known_app_slugs)
             # Con MÁS de un grupo de app reconocido no hay forma de saber cuál
             # de los dos disparó este evento en particular — devolver el
             # primero alfabéticamente adivinaba mal con usuarios multi-app
@@ -191,7 +216,7 @@ async def _resolve_app_slug_from_groups(user_username: str) -> str | None:
         return None
 
 
-async def _resolve_app_slug(user_username: str, oauth_client_id: str | None, http_path: str | None = None) -> str | None:
+async def _resolve_app_slug(user_username: str, oauth_client_id: str | None, http_path: str | None, db: AsyncSession) -> str | None:
     slug = await _resolve_app_slug_from_client_id(oauth_client_id)
     if slug:
         return slug
@@ -207,7 +232,7 @@ async def _resolve_app_slug(user_username: str, oauth_client_id: str | None, htt
     # Starter (confirmado en vivo 2026-07-09).
     # Fallback: http_path se ignora, vuelve a _resolve_app_slug_from_groups.
 
-    return await _resolve_app_slug_from_groups(user_username)
+    return await _resolve_app_slug_from_groups(user_username, db)
 
 
 async def _get_lockout_threshold(db: AsyncSession) -> int:
@@ -370,6 +395,24 @@ async def handle_authentik_event(request: Request, db: AsyncSession = Depends(ge
     if action == "login":
         return {"status": "ignored", "reason": "login_success deshabilitado"}
 
+    if action == "model_created":
+        # Onboarding automático de tenants/apps nuevos — ver
+        # casmarts-brand-created-matcher/casmarts-app-created-matcher en
+        # casmarts-event-webhooks.yaml. No es un evento de correo a
+        # usuario: solo sincroniza tenants/tenant_applications y corta aquí.
+        model_app = payload.get("model_app")
+        model_name = payload.get("model_name")
+        if model_app == "authentik_brands" and model_name == "brand":
+            await _sync_tenants_from_authentik(db)
+            log.info("Nueva Brand detectada en Authentik — tenants sincronizados")
+            return {"status": "synced", "reason": "tenant sincronizado desde Brand nueva"}
+        if model_app == "authentik_core" and model_name == "application":
+            await _auto_link_unassigned_applications(db)
+            log.info("Nueva Application detectada en Authentik — auto-link de tenant_applications re-evaluado")
+            return {"status": "synced", "reason": "aplicaciones re-evaluadas para auto-enlace"}
+        log.info("Webhook de Authentik ignorado (model_created de %s.%s, sin manejo)", model_app, model_name)
+        return {"status": "ignored", "reason": f"model_created de {model_app}.{model_name} sin manejo"}
+
     if action == "model_updated":
         resolved = await _resolve_admin_toggle_event(payload)
         if resolved is None:
@@ -432,7 +475,7 @@ async def handle_authentik_event(request: Request, db: AsyncSession = Depends(ge
         # {{aplicacion_nombre}}.
         app_slug, authorized_app_name = await _resolve_app_from_pk(authorized_app_pk)
     else:
-        app_slug = await _resolve_app_slug(user_username, oauth_client_id, payload.get("http_path"))
+        app_slug = await _resolve_app_slug(user_username, oauth_client_id, payload.get("http_path"), db)
 
     # DEBUG: Log full resolution chain para diagnosticar email branding equivocado
     log.warning(
@@ -463,14 +506,47 @@ async def handle_authentik_event(request: Request, db: AsyncSession = Depends(ge
         theme = r.scalar_one_or_none()
         if theme:
             theme_source = f"app-specific ({app_slug})"
+            
     if theme is None:
-        r = await db.execute(select(TenantTheme).where(
-            TenantTheme.authentik_flow_slug == _FLOW_SLUG,
-            TenantTheme.authentik_app_slug.is_(None),
-        ))
-        theme = r.scalar_one_or_none()
-        if theme:
-            theme_source = "global"
+        # Ubicar el tenant dueño de esta app de forma genérica: cualquier fila
+        # TenantTheme ya registrada para ese app_slug (sin importar el flow)
+        # revela su tenant_id — la asociación app→tenant es invariante entre
+        # flows. Antes esto era un "if 'teca' in app_slug.lower() / elif
+        # 'usana' in ..." hardcodeado: no escalaba a tenants nuevos y fallaba
+        # si el app_slug no contenía el nombre de marca literal.
+        target_tenant_id = None
+        if app_slug:
+            r_owner = await db.execute(
+                select(TenantTheme.tenant_id)
+                .where(TenantTheme.authentik_app_slug == app_slug)
+                .limit(1)
+            )
+            target_tenant_id = r_owner.scalar_one_or_none()
+
+        if target_tenant_id:
+            r = await db.execute(select(TenantTheme).where(
+                TenantTheme.tenant_id == target_tenant_id,
+                TenantTheme.authentik_flow_slug == _FLOW_SLUG,
+                TenantTheme.authentik_app_slug.is_(None),
+            ))
+            theme = r.scalar_one_or_none()
+            if theme:
+                theme_source = f"tenant-global ({target_tenant_id})"
+
+        if not theme:
+            # Último recurso: tema global del tenant por defecto, de forma
+            # explícita — nunca tomar "cualquier" fila que matchee sin
+            # filtrar por tenant, porque con más tenants deja de ser
+            # determinista cuál se sirve.
+            r = await db.execute(select(TenantTheme).where(
+                TenantTheme.tenant_id == DEFAULT_TENANT_UUID,
+                TenantTheme.authentik_flow_slug == _FLOW_SLUG,
+                TenantTheme.authentik_app_slug.is_(None),
+            ))
+            theme = r.scalar_one_or_none()
+            if theme:
+                theme_source = "global-default-tenant"
+            
     if not theme:
         raise HTTPException(status_code=404, detail=f"No hay tema configurado para flow '{_FLOW_SLUG}'.")
 

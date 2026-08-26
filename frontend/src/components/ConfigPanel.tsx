@@ -14,11 +14,14 @@ const darkenHex = (hex: string, amount = 0.2): string => {
   return '#' + [r, g, b].map(n => n.toString(16).padStart(2, '0')).join('');
 };
 import { Upload, RotateCcw, Save, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
-import { Theme } from '../types/theme';
+import { Theme, FontPreset } from '../types/theme';
 import { SavePhase } from '../hooks/useTheme';
 import { AccessAndNotificationsTab } from './tabs/AccessAndNotificationsTab';
-import { TenantSelector } from './TenantSelector';
+import { ApplicationsTab } from './tabs/ApplicationsTab';
+import { TenantBrandingTab } from './tabs/TenantBrandingTab';
+import { TenantSelector, BrandPaletteSwatch } from './TenantSelector';
 import { ExpansionSettingsManager } from './ExpansionSettings';
+import { themesApi } from '../api/themesApi';
 
 /**
  * Propiedades para el componente del panel de configuración de temas.
@@ -29,7 +32,11 @@ interface ConfigPanelProps {
   savePhase: SavePhase;
   deployError: string | null;
   onUpdateField: <K extends keyof Theme>(key: K, value: Theme[K]) => void;
-  onUploadFile: (key: 'logo_top_base64' | 'logo_bottom_base64' | 'bg_image_base64', file: File) => void;
+  onUploadFile: (
+    key: 'logo_top_base64' | 'logo_bottom_base64' | 'bg_image_base64' | 'favicon_base64'
+      | 'custom_font_heading_base64' | 'custom_font_body_base64',
+    file: File
+  ) => void;
   onSave: () => void;
   onRetryDeploy: () => void;
   authentikApps: { slug: string; name: string }[];
@@ -68,10 +75,38 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   const logoTopRef = useRef<HTMLInputElement>(null);
   const logoBottomRef = useRef<HTMLInputElement>(null);
   const bgImgRef = useRef<HTMLInputElement>(null);
+  const faviconRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
 
   const [newKey, setNewKey] = React.useState('');
   const [newVal, setNewVal] = React.useState('');
+
+  const [fontPresets, setFontPresets] = React.useState<FontPreset[]>([]);
+  React.useEffect(() => {
+    themesApi.getFontPresets().then(setFontPresets).catch(() => setFontPresets([]));
+  }, []);
+
+  // Paleta de swatches sugeridas para el selector rápido de color del
+  // tenant seleccionado (Tenant.config.brand_palette, ver TenantSettingsUpdate
+  // en admin.py) — reemplaza la adivinanza anterior por substring "teca" en
+  // el texto del tema, que cualquier tenant podía disparar sin querer.
+  const [tenantPalette, setTenantPalette] = React.useState<BrandPaletteSwatch[] | null>(null);
+  React.useEffect(() => {
+    if (!selectedTenantId) {
+      setTenantPalette(null);
+      return;
+    }
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+    fetch(`${apiBase}/api/v1/tenant/list`)
+      .then((r) => r.json())
+      .then((tenants: Array<{ tenant_id: string; brand_palette?: BrandPaletteSwatch[] | null }>) => {
+        const match = tenants.find((t) => t.tenant_id === selectedTenantId);
+        setTenantPalette(match?.brand_palette && match.brand_palette.length > 0 ? match.brand_palette : null);
+      })
+      .catch(() => setTenantPalette(null));
+  }, [selectedTenantId]);
+  const customFontHeadingRef = useRef<HTMLInputElement>(null);
+  const customFontBodyRef = useRef<HTMLInputElement>(null);
 
   const customMsgs = theme.custom_messages || {};
 
@@ -98,7 +133,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   const isBusy = savePhase === 'saving' || savePhase === 'deploying';
 
   const handleFileChange = (
-    key: 'logo_top_base64' | 'logo_bottom_base64' | 'bg_image_base64',
+    key: 'logo_top_base64' | 'logo_bottom_base64' | 'bg_image_base64' | 'favicon_base64'
+      | 'custom_font_heading_base64' | 'custom_font_body_base64',
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
@@ -182,7 +218,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
       <button
         onClick={onSave}
         disabled={!isDirty}
-        className={`w-full py-3.5 text-xs font-bold tracking-widest text-white rounded-xl shadow-lg flex items-center justify-center gap-2 select-none uppercase transition-all font-sans ${!isDirty ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-[#4272A5] hover:bg-[#2d5580] cursor-pointer'
+        className={`w-full py-3.5 text-xs font-bold tracking-widest text-white rounded-xl shadow-lg flex items-center justify-center gap-2 select-none uppercase transition-all font-sans ${!isDirty ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'tenant-accent-bg cursor-pointer'
           }`}
       >
         <Save className="w-4 h-4" />
@@ -194,7 +230,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   return (
     <div className="w-full h-full bg-[#f7f4f0] border-l-2 border-gray-200 flex flex-col overflow-hidden select-none">
       {/* Panel Header */}
-      <div className="bg-[#4272A5] text-white px-5 py-4 font-bold text-sm tracking-wide shrink-0 shadow-sm flex items-center justify-between font-sans">
+      <div className="tenant-accent-bg text-white px-5 py-4 font-bold text-sm tracking-wide shrink-0 shadow-sm flex items-center justify-between font-sans">
         <span>⚙ PANEL DE CONFIGURACIÓN</span>
         <div className="flex items-center gap-1">
           {isDirty ? (
@@ -221,6 +257,16 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
             onSelectTenant={onSelectTenant}
           />
         </div>
+
+        {/* 0.5. TENANT BRANDING — color primario/secundario y paleta institucional del TENANT (no del tema) */}
+        {selectedTenantId && (
+          <div className="border-b border-gray-200 pb-5">
+            <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase mb-3 font-sans">
+              🏷 Marca del Tenant
+            </h3>
+            <TenantBrandingTab tenantId={selectedTenantId} />
+          </div>
+        )}
 
         {/* 1. APPLICATION MAPPING — justo después del tenant, solo disponible si hay tenant */}
         {selectedTenantId ? (
@@ -309,7 +355,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
             </div>
             <div>
               <label className="block text-[10px] font-semibold text-gray-400 mb-1 font-sans">Alineación</label>
-              <div className="grid grid-cols-3 gap-1">
+              <div className="grid grid-cols-3 gap-1 mb-2.5">
                 {(['left', 'center', 'right'] as const).map((align) => (
                   <button
                     key={align}
@@ -323,11 +369,30 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 ))}
               </div>
             </div>
+            <div className="flex items-center justify-between border-t border-dashed border-gray-200 pt-2.5">
+              <span className="text-[10px] font-semibold text-gray-500 font-sans">Color del título</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={theme.system_name_color || '#111827'}
+                  onChange={(e) => onUpdateField('system_name_color', e.target.value)}
+                  className="w-8 h-6 border border-gray-300 rounded cursor-pointer p-0.5"
+                />
+                <input
+                  type="text"
+                  value={theme.system_name_color || '#111827'}
+                  onChange={(e) => onUpdateField('system_name_color', e.target.value)}
+                  className="w-20 h-6 border border-gray-300 rounded px-1.5 text-[10px] text-gray-600 uppercase font-mono font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="bg-white border border-gray-200 rounded-xl p-3.5 space-y-3 shadow-sm">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5 font-sans">Subtítulo</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5 font-sans">
+                Subtítulo (Acepta HTML básico: &lt;br&gt;)
+              </label>
               <input
                 type="text"
                 value={theme.system_subtitle}
@@ -337,7 +402,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
             </div>
             <div>
               <label className="block text-[10px] font-semibold text-gray-400 mb-1 font-sans">Alineación</label>
-              <div className="grid grid-cols-3 gap-1">
+              <div className="grid grid-cols-3 gap-1 mb-2.5">
                 {(['left', 'center', 'right'] as const).map((align) => (
                   <button
                     key={align}
@@ -349,6 +414,40 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     {align === 'left' ? 'Izq' : align === 'right' ? 'Der' : 'Cen'}
                   </button>
                 ))}
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-t border-dashed border-gray-200 pt-2.5">
+              <span className="text-[10px] font-semibold text-gray-500 font-sans">Color del subtítulo</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={theme.system_subtitle_color || '#374151'}
+                  onChange={(e) => onUpdateField('system_subtitle_color', e.target.value)}
+                  className="w-8 h-6 border border-gray-300 rounded cursor-pointer p-0.5"
+                />
+                <input
+                  type="text"
+                  value={theme.system_subtitle_color || '#374151'}
+                  onChange={(e) => onUpdateField('system_subtitle_color', e.target.value)}
+                  className="w-20 h-6 border border-gray-300 rounded px-1.5 text-[10px] text-gray-600 uppercase font-mono font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-t border-dashed border-gray-200 pt-2.5">
+              <span className="text-[10px] font-semibold text-gray-500 font-sans">Color de etiquetas (Usuario/Contraseña)</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={theme.field_label_color || '#374151'}
+                  onChange={(e) => onUpdateField('field_label_color', e.target.value)}
+                  className="w-8 h-6 border border-gray-300 rounded cursor-pointer p-0.5"
+                />
+                <input
+                  type="text"
+                  value={theme.field_label_color || '#374151'}
+                  onChange={(e) => onUpdateField('field_label_color', e.target.value)}
+                  className="w-20 h-6 border border-gray-300 rounded px-1.5 text-[10px] text-gray-600 uppercase font-mono font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+                />
               </div>
             </div>
           </div>
@@ -368,7 +467,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                   key={mode}
                   type="button"
                   onClick={() => {
-                    if (mode === 'imagen') { /* handled by file input */ logoTopRef.current?.click(); }
+                    if (mode === 'imagen') { logoTopRef.current?.click(); }
                     else if (mode === 'texto') { onUpdateField('logo_top_base64', null); if (!theme.logo_top_text) onUpdateField('logo_top_text', ''); }
                     else { onUpdateField('logo_top_base64', null); onUpdateField('logo_top_text', null); }
                   }}
@@ -416,15 +515,49 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
               </div>
             ) : theme.logo_top_text !== null && (
               /* Text mode */
-              <div className="flex flex-col gap-1.5">
-                <textarea
-                  value={theme.logo_top_text || ''}
-                  onChange={(e) => onUpdateField('logo_top_text', e.target.value || null)}
-                  placeholder="Texto del logo superior (acepta <br>)"
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-sans resize-none focus:outline-none focus:border-[#4272A5]"
-                />
-                <p className="text-[9px] text-gray-400 font-sans">Acepta HTML básico: &lt;br&gt;, &lt;b&gt;, &lt;span&gt;</p>
+              <div className="flex flex-col gap-2.5 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+                <div>
+                  <label className="block text-xxs font-semibold text-gray-500 mb-1 font-sans">Texto del logotipo</label>
+                  <textarea
+                    value={theme.logo_top_text || ''}
+                    onChange={(e) => onUpdateField('logo_top_text', e.target.value || null)}
+                    placeholder="Texto del logo superior (acepta <br>)"
+                    rows={2}
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-sans resize-none focus:outline-none focus:border-[#4272A5]"
+                  />
+                  <p className="text-[9px] text-gray-400 font-sans mt-0.5">Acepta HTML básico: &lt;br&gt;, &lt;b&gt;, &lt;span&gt;</p>
+                </div>
+                <div className="flex items-center justify-between border-t border-dashed border-gray-200 pt-2">
+                  <span className="text-[10px] font-semibold text-gray-500 font-sans">Color del texto</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={theme.logo_top_text_color || '#FFFFFF'}
+                      onChange={(e) => onUpdateField('logo_top_text_color', e.target.value)}
+                      className="w-7 h-5 border border-gray-300 rounded cursor-pointer p-0.5"
+                    />
+                    <input
+                      type="text"
+                      value={theme.logo_top_text_color || '#FFFFFF'}
+                      onChange={(e) => onUpdateField('logo_top_text_color', e.target.value)}
+                      className="w-16 h-5 border border-gray-300 rounded px-1 text-[9px] text-gray-600 uppercase font-mono font-bold focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="border-t border-dashed border-gray-200 pt-2">
+                  <div className="flex justify-between items-center text-[10px] font-semibold text-gray-500 mb-1 font-sans">
+                    <span>Tamaño de fuente</span>
+                    <span>{theme.logo_top_text_size || 24}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="12"
+                    max="48"
+                    value={theme.logo_top_text_size || 24}
+                    onChange={(e) => onUpdateField('logo_top_text_size', parseInt(e.target.value))}
+                    className="w-full accent-[#4272A5] cursor-pointer"
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -490,18 +623,112 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 <img src={theme.logo_bottom_base64} alt="Preview bottom" className="max-h-full object-contain" />
               </div>
             ) : theme.logo_bottom_text !== null && (
-              <div className="flex flex-col gap-1.5">
-                <textarea
-                  value={theme.logo_bottom_text || ''}
-                  onChange={(e) => onUpdateField('logo_bottom_text', e.target.value || null)}
-                  placeholder="Texto del logo inferior (acepta <br>)"
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-sans resize-none focus:outline-none focus:border-[#4272A5]"
-                />
-                <p className="text-[9px] text-gray-400 font-sans">Acepta HTML básico: &lt;br&gt;, &lt;b&gt;, &lt;span&gt;</p>
+              <div className="flex flex-col gap-2.5 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+                <div>
+                  <label className="block text-xxs font-semibold text-gray-500 mb-1 font-sans">Texto del logotipo</label>
+                  <textarea
+                    value={theme.logo_bottom_text || ''}
+                    onChange={(e) => onUpdateField('logo_bottom_text', e.target.value || null)}
+                    placeholder="Texto del logo inferior (acepta <br>)"
+                    rows={2}
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-sans resize-none focus:outline-none focus:border-[#4272A5]"
+                  />
+                  <p className="text-[9px] text-gray-400 font-sans mt-0.5">Acepta HTML básico: &lt;br&gt;, &lt;b&gt;, &lt;span&gt;</p>
+                </div>
+                <div className="flex items-center justify-between border-t border-dashed border-gray-200 pt-2">
+                  <span className="text-[10px] font-semibold text-gray-500 font-sans">Color del texto</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={theme.logo_bottom_text_color || '#FFFFFF'}
+                      onChange={(e) => onUpdateField('logo_bottom_text_color', e.target.value)}
+                      className="w-7 h-5 border border-gray-300 rounded cursor-pointer p-0.5"
+                    />
+                    <input
+                      type="text"
+                      value={theme.logo_bottom_text_color || '#FFFFFF'}
+                      onChange={(e) => onUpdateField('logo_bottom_text_color', e.target.value)}
+                      className="w-16 h-5 border border-gray-300 rounded px-1 text-[9px] text-gray-600 uppercase font-mono font-bold focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="border-t border-dashed border-gray-200 pt-2">
+                  <div className="flex justify-between items-center text-[10px] font-semibold text-gray-500 mb-1 font-sans">
+                    <span>Tamaño de fuente</span>
+                    <span>{theme.logo_bottom_text_size || 20}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="12"
+                    max="48"
+                    value={theme.logo_bottom_text_size || 20}
+                    onChange={(e) => onUpdateField('logo_bottom_text_size', parseInt(e.target.value))}
+                    className="w-full accent-[#4272A5] cursor-pointer"
+                  />
+                </div>
               </div>
             )}
           </div>
+        </div>
+
+        {/* 4.5. FAVICON MANAGER */}
+        <div className="border-b border-gray-200 pb-5 space-y-3">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase font-sans">
+            🔖 Favicon del Tenant / Aplicación
+          </h3>
+          <p className="text-[10px] text-gray-500 font-sans leading-relaxed">
+            {theme.authentik_app_slug
+              ? 'Personaliza el ícono de la pestaña del navegador solo para esta aplicación.'
+              : 'Personaliza el ícono de la pestaña del navegador para todo el dominio de este tenant (se aplica directamente en Authentik).'}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => faviconRef.current?.click()}
+              className="flex items-center gap-2 px-3 py-2 border border-[#4272A5] rounded-lg text-xs font-semibold text-[#4272A5] hover:bg-[#4272A5]/5 cursor-pointer font-sans bg-white"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              Subir Favicon (.ico / .png / .svg)
+            </button>
+            <input
+              ref={faviconRef}
+              type="file"
+              accept="image/x-icon,image/png,image/svg+xml,image/jpeg"
+              onChange={(e) => handleFileChange('favicon_base64', e)}
+              className="hidden"
+            />
+            {theme.favicon_base64 && (
+              <button
+                type="button"
+                onClick={() => onUpdateField('favicon_base64', null)}
+                className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 font-sans bg-white"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Quitar
+              </button>
+            )}
+          </div>
+
+          {theme.favicon_base64 ? (
+            <div className="flex items-center gap-3 bg-white p-2.5 border border-gray-200 rounded-xl shadow-sm">
+              <div className="w-8 h-8 rounded border border-gray-200 bg-gray-50 flex items-center justify-center p-1 overflow-hidden shrink-0">
+                <img src={theme.favicon_base64} alt="Favicon Preview" className="max-w-full max-h-full object-contain" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-gray-700 font-sans">Vista Previa de Favicon</span>
+                <span className="text-[10px] text-green-600 font-semibold font-sans">✓ Ícono configurado</span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-[10px] text-gray-400 font-sans italic">Sin favicon personalizado. Se utilizará el ícono predeterminado del sistema.</p>
+          )}
+
+          {!theme.authentik_app_slug && theme.favicon_sync_error && (
+            <p className="text-[10px] text-red-600 font-sans">
+              ⚠ Guardado, pero no se pudo aplicar en Authentik: {theme.favicon_sync_error}
+            </p>
+          )}
         </div>
 
         {/* 5. BACKGROUND CHANGER */}
@@ -650,22 +877,26 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
           </h3>
 
           <div className="flex flex-wrap gap-2">
-            {PREDEFINED_COLORS.map((c) => (
-              <button
-                key={c.color}
-                type="button"
-                onClick={() => {
-                  onUpdateField('primary_color', c.color);
-                  onUpdateField('hover_color', c.hover);
-                }}
-                className={`w-9 h-9 rounded-full shadow-sm cursor-pointer border-2 transition-all flex items-center justify-center text-white font-bold text-xs ${theme.primary_color === c.color ? 'border-gray-900 scale-110 shadow-md' : 'border-transparent'
-                  }`}
-                style={{ backgroundColor: c.color }}
-                title={c.name}
-              >
-                {theme.primary_color === c.color && '✓'}
-              </button>
-            ))}
+            {(() => {
+              const palette = tenantPalette ?? PREDEFINED_COLORS;
+
+              return palette.map((c) => (
+                <button
+                  key={c.color}
+                  type="button"
+                  onClick={() => {
+                    onUpdateField('primary_color', c.color);
+                    onUpdateField('hover_color', c.hover);
+                  }}
+                  className={`w-9 h-9 rounded-full shadow-sm cursor-pointer border-2 transition-all flex items-center justify-center text-white font-bold text-xs ${theme.primary_color === c.color ? 'border-gray-900 scale-110 shadow-md' : 'border-transparent'
+                    }`}
+                  style={{ backgroundColor: c.color }}
+                  title={c.name}
+                >
+                  {theme.primary_color === c.color && '✓'}
+                </button>
+              ));
+            })()}
           </div>
 
           <div className="bg-white p-3 border border-gray-200 rounded-xl flex items-center justify-between shadow-sm">
@@ -692,6 +923,66 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
               />
             </div>
           </div>
+        </div>
+
+        {/* 6.5. TIPOGRAFÍA */}
+        <div className="border-b border-gray-200 pb-5 space-y-4">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase font-sans">
+            🔤 Tipografía
+          </h3>
+
+          {([
+            { fontKey: 'font_heading' as const, nameKey: 'custom_font_heading_name' as const, base64Key: 'custom_font_heading_base64' as const, ref: customFontHeadingRef, label: 'Encabezados (nombre del sistema, logos de texto)' },
+            { fontKey: 'font_body' as const, nameKey: 'custom_font_body_name' as const, base64Key: 'custom_font_body_base64' as const, ref: customFontBodyRef, label: 'Cuerpo (formulario, etiquetas)' },
+          ]).map(({ fontKey, nameKey, base64Key, ref, label }) => {
+            const selected = fontPresets.find(f => f.key === theme[fontKey]);
+            const requiresUpload = selected?.requires_upload ?? false;
+            return (
+              <div key={fontKey} className="space-y-2">
+                <label className="text-xxs font-semibold text-gray-500 font-sans">{label}</label>
+                <select
+                  value={theme[fontKey] || 'inter'}
+                  onChange={(e) => onUpdateField(fontKey, e.target.value as Theme[typeof fontKey])}
+                  className="w-full h-8 border border-gray-300 rounded-lg px-2 text-xs font-sans focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  {fontPresets.map((f) => (
+                    <option key={f.key} value={f.key}>{f.label}</option>
+                  ))}
+                </select>
+
+                {requiresUpload && (
+                  <div className="bg-white p-2.5 border border-dashed border-gray-300 rounded-lg space-y-2">
+                    <input
+                      type="text"
+                      value={theme[nameKey] || ''}
+                      onChange={(e) => onUpdateField(nameKey, e.target.value)}
+                      placeholder="Nombre exacto de la fuente (ej. Gotham)"
+                      className="w-full h-7 border border-gray-300 rounded px-1.5 text-xs font-sans focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <div className="flex items-center justify-between">
+                      <span className="text-xxs text-gray-400 font-sans">
+                        {theme[base64Key] ? '✓ Archivo cargado' : 'Sin archivo — sube el .woff2/.ttf licenciado'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => ref.current?.click()}
+                        className="text-xxs font-semibold text-[#4272A5] hover:underline font-sans flex items-center gap-1"
+                      >
+                        <Upload size={12} /> Subir
+                      </button>
+                      <input
+                        ref={ref}
+                        type="file"
+                        accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf"
+                        onChange={(e) => handleFileChange(base64Key, e)}
+                        className="hidden"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* 7. FORM & LOGOS CONTAINERS OPACITY / HEIGHT */}
@@ -743,7 +1034,12 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                   onChange={(e) => onUpdateField('card_bg_color', e.target.value)}
                   className="w-8 h-6 border border-gray-300 rounded cursor-pointer p-0.5"
                 />
-                <span className="text-[9px] text-gray-500 uppercase font-mono font-bold">{theme.card_bg_color || '#FFFFFF'}</span>
+                <input
+                  type="text"
+                  value={theme.card_bg_color || '#FFFFFF'}
+                  onChange={(e) => onUpdateField('card_bg_color', e.target.value)}
+                  className="w-20 h-6 border border-gray-300 rounded px-1.5 text-[10px] text-gray-600 uppercase font-mono font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+                />
               </div>
             </div>
           </div>
@@ -783,7 +1079,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
             </div>
 
             <div className="flex items-center justify-between border-t border-dashed border-gray-200 pt-3.5">
-              <span className="text-[10px] font-semibold text-gray-500 font-sans">Color de fondo</span>
+              <span className="text-[10px] font-semibold text-gray-500 font-sans">Color de fondo (Panel de logos)</span>
               <div className="flex items-center gap-2">
                 <input
                   type="color"
@@ -791,7 +1087,12 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                   onChange={(e) => onUpdateField('panel_bg_color', e.target.value)}
                   className="w-8 h-6 border border-gray-300 rounded cursor-pointer p-0.5"
                 />
-                <span className="text-[9px] text-gray-500 uppercase font-mono font-bold">{theme.panel_bg_color || '#F6F9FD'}</span>
+                <input
+                  type="text"
+                  value={theme.panel_bg_color || '#F6F9FD'}
+                  onChange={(e) => onUpdateField('panel_bg_color', e.target.value)}
+                  className="w-20 h-6 border border-gray-300 rounded px-1.5 text-[10px] text-gray-600 uppercase font-mono font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+                />
               </div>
             </div>
           </div>
@@ -867,6 +1168,14 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
             theme={theme}
             onUpdateField={onUpdateField}
           />
+        </div>
+
+        {/* 8.5. APPLICATIONS <-> TENANT LINK */}
+        <div className="border-b border-gray-200 pb-5">
+          <h3 className="text-xs font-bold text-[#4272A5] tracking-wider uppercase mb-3 font-sans">
+            🔗 Aplicaciones
+          </h3>
+          <ApplicationsTab selectedTenantId={selectedTenantId} />
         </div>
 
         {/* 9. CUSTOM MESSAGES / TRANSLATIONS */}

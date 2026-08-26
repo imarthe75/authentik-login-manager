@@ -143,8 +143,12 @@ export const themesApi = {
     toEmail: string,
     appSlug?: string,
     displayName?: string,
+    tenantId?: string | null,
   ): Promise<{ status: string; to: string; subject: string }> {
-    const response = await adminFetch(`${API_BASE}/api/v1/themes/${flowSlug}/emails/test`, {
+    const url = tenantId
+      ? `${API_BASE}/api/v1/themes/${flowSlug}/emails/test?tenant_id=${tenantId}`
+      : `${API_BASE}/api/v1/themes/${flowSlug}/emails/test`;
+    const response = await adminFetch(url, {
       method: 'POST',
       headers: getHeaders(),
       credentials: 'include',
@@ -183,25 +187,45 @@ export const themesApi = {
   async getDefaultEmailBody(
     flowSlug: string,
     eventType: string,
-    appSlug?: string | null
+    appSlug?: string | null,
+    tenantId?: string | null,
   ): Promise<{ subject: string; body_html: string }> {
-    const params = appSlug ? `?app_slug=${appSlug}` : '';
+    const params = new URLSearchParams();
+    if (appSlug) params.set('app_slug', appSlug);
+    if (tenantId) params.set('tenant_id', tenantId);
+    const qs = params.toString() ? `?${params.toString()}` : '';
     const response = await adminFetch(
-      `${API_BASE}/api/v1/themes/${flowSlug}/emails/default-body/${eventType}${params}`,
+      `${API_BASE}/api/v1/themes/${flowSlug}/emails/default-body/${eventType}${qs}`,
       { method: 'GET', headers: getHeaders(), credentials: 'include' }
     );
     if (!response.ok) throw new Error(`Failed to fetch default email body: ${response.statusText}`);
     return response.json();
   },
 
-  async getEmailPreview(flowSlug: string, eventType: string, appSlug?: string | null): Promise<string> {
-    const params = appSlug ? `?app_slug=${appSlug}` : '';
+  async getEmailPreview(flowSlug: string, eventType: string, appSlug?: string | null, tenantId?: string | null): Promise<string> {
+    const params = new URLSearchParams();
+    if (appSlug) params.set('app_slug', appSlug);
+    if (tenantId) params.set('tenant_id', tenantId);
+    const qs = params.toString() ? `?${params.toString()}` : '';
     const response = await adminFetch(
-      `${API_BASE}/api/v1/themes/${flowSlug}/emails/preview/${eventType}${params}`,
+      `${API_BASE}/api/v1/themes/${flowSlug}/emails/preview/${eventType}${qs}`,
       { method: 'GET', headers: getHeaders(), credentials: 'include' }
     );
     if (!response.ok) throw new Error(`Email preview failed: ${response.statusText}`);
     return response.text();
+  },
+
+  async getFontPresets(): Promise<Array<{
+    key: string; label: string; css_family: string;
+    google_query: string | null; requires_upload: boolean;
+  }>> {
+    const response = await adminFetch(`${API_BASE}/api/v1/themes/font-presets`, {
+      method: 'GET',
+      headers: getHeaders(),
+      credentials: 'include',
+    });
+    if (!response.ok) throw new Error(`Failed to fetch font presets: ${response.statusText}`);
+    return response.json();
   },
 
   async getEmailTemplates(): Promise<{
