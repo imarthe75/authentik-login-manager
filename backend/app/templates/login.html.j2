@@ -594,7 +594,7 @@ var ECSS=[
   "ak-empty-state [slot='body'],ak-empty-state [slot='body'] p,ak-empty-state [slot='body'] *,.pf-c-form__helper-text.pf-m-error,p.pf-m-error{display:revert!important;visibility:visible!important;opacity:1!important;height:auto!important;overflow:visible!important}",
   "ak-empty-state [slot='body'] p,.pf-c-form__helper-text.pf-m-error{color:#b1151c!important;font-size:0.9rem!important}",
   "@media (prefers-color-scheme: dark){ak-empty-state [slot='body'] p,.pf-c-form__helper-text.pf-m-error{color:#ff6b6b!important}}",
-".pf-c-input-group{display:flex!important;width:100%!important;align-items:stretch!important;position:relative!important;box-shadow:none!important;outline:none!important;box-sizing:border-box!important}",
+".pf-c-input-group{display:flex!important;width:100%!important;align-items:stretch!important;position:relative!important;background:transparent!important;box-shadow:none!important;outline:none!important;box-sizing:border-box!important}",
 ".pf-c-input-group>.pf-c-form-control,.pf-c-input-group>input:not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]){flex:1 1 auto!important;width:0!important;min-width:0!important;border-top-right-radius:0!important;border-bottom-right-radius:0!important;border-right:none!important}",
 ".pf-c-input-group>.pf-c-button,.pf-c-input-group>button{border-top-left-radius:0!important;border-bottom-left-radius:0!important;border-left:1px solid rgba(0,0,0,0.15)!important;box-shadow:none!important;outline:none!important}",
 ".pf-c-input-group>.pf-c-button::after,.pf-c-input-group>button::after{display:none!important;content:none!important;border:none!important}",
@@ -1502,10 +1502,11 @@ new MutationObserver(function(){scan(document);}).observe(document.documentEleme
                 width: 100% !important;
                 align-items: stretch !important;
                 position: relative !important;
+                background: transparent !important;
                 box-sizing: border-box !important;
             }
             .pf-c-input-group > .pf-c-form-control,
-            .pf-c-input-group > input {
+            .pf-c-input-group > input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
                 flex: 1 1 auto !important;
                 width: 0 !important;
                 min-width: 0 !important;
