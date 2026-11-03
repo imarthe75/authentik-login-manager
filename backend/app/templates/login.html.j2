@@ -28,6 +28,14 @@
 <style data-id="casmarts-branding">
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
+/* Box-sizing universal — sin esto, el padding que los breakpoints de
+   tablet/móvil agregan a #cs-screen se SUMA al width/max-width en vez de
+   restarse de él, y la tarjeta se desborda del viewport en pantallas
+   angostas (causaba scroll horizontal / recorte en teléfonos). */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
 /* ── RESET NATIVO AUTHENTIK ─────────────────────────── */
 html {
     height: 100%;
@@ -106,6 +114,7 @@ body {
     width: 820px;
     max-width: 90vw;
     height: 70vh;
+    height: 70dvh; /* dvh real de navegadores moviles; vh de arriba es el fallback */
     min-height: 560px;
     max-height: 620px;
     transition: all 0.3s ease;
@@ -331,11 +340,28 @@ ak-skip-to-content {
         width: 95vw;
         max-width: 600px;
         height: 90vh !important;
+        height: 90dvh !important;
         min-height: 500px !important;
         max-height: 90vh !important;
+        max-height: 90dvh !important;
         overflow: hidden !important;
         flex-direction: column !important;
         align-items: center;
+    }
+    /* #cs-screen.cs-left/.cs-right traen `left:6vw`/`right:6vw` para el
+       layout de escritorio de dos paneles (ver reglas base mas arriba) — a
+       este ancho el layout ya esta apilado en una sola columna y ese offset
+       asimetrico no se limpiaba, asi que la tarjeta no quedaba centrada: con
+       layout_position "left" (el valor por default de TenantTheme) el borde
+       derecho se salia unos px del viewport en telefonos reales (detectado
+       con Playwright, no a simple vista). Forzar centrado explicito aqui,
+       sin importar la clase. */
+    #cs-screen.cs-left,
+    #cs-screen.cs-right,
+    #cs-screen.cs-center {
+        left: 50% !important;
+        right: auto !important;
+        transform: translate(-50%, -50%) !important;
     }
     #cs-form-col {
         width: 100% !important;
@@ -372,12 +398,29 @@ ak-skip-to-content {
         width: 95vw;
         max-width: 380px;
         height: 95vh !important;
+        height: 95dvh !important;
         min-height: 450px !important;
         max-height: 95vh !important;
+        max-height: 95dvh !important;
         overflow: hidden !important;
         flex-direction: column !important;
         align-items: center;
         padding: 1rem !important;
+    }
+    /* #cs-screen.cs-left/.cs-right traen `left:6vw`/`right:6vw` para el
+       layout de escritorio de dos paneles (ver reglas base mas arriba) — a
+       este ancho el layout ya esta apilado en una sola columna y ese offset
+       asimetrico no se limpiaba, asi que la tarjeta no quedaba centrada: con
+       layout_position "left" (el valor por default de TenantTheme) el borde
+       derecho se salia unos px del viewport en telefonos reales (detectado
+       con Playwright, no a simple vista). Forzar centrado explicito aqui,
+       sin importar la clase. */
+    #cs-screen.cs-left,
+    #cs-screen.cs-right,
+    #cs-screen.cs-center {
+        left: 50% !important;
+        right: auto !important;
+        transform: translate(-50%, -50%) !important;
     }
     #cs-form-col {
         width: 100% !important;
@@ -410,6 +453,27 @@ ak-skip-to-content {
 @media (max-width: 480px) {
     #cs-form-subtitle {
         margin-bottom: 20px !important;
+    }
+}
+
+/* ── RESPONSIVIDAD (ALTURA CORTA) ────────────────
+   Teléfonos en horizontal y ventanas bajas: el min-height fijo de las
+   reglas anteriores (560/500/450px) puede superar el alto REAL del
+   viewport. El body tiene overflow:hidden (el scroll vive adentro, en
+   #cs-scroll-area — ver comentario de #cs-executor-wrap), así que si el
+   card entero es más alto que la pantalla no hay forma de alcanzar lo
+   que queda recortado arriba/abajo. Por eso esta regla no depende del
+   ANCHO sino de la ALTURA, y va después de las de arriba para ganarles. */
+@media (max-height: 560px) {
+    #cs-screen {
+        height: 92vh !important;
+        height: 92dvh !important;
+        min-height: 0 !important;
+        max-height: 92vh !important;
+        max-height: 92dvh !important;
+    }
+    #cs-logos-col {
+        max-height: 120px !important;
     }
 }
 
@@ -529,7 +593,16 @@ var ECSS=[
      2026-07-09: agregado soporte para modo oscuro del sistema. */
   "ak-empty-state [slot='body'],ak-empty-state [slot='body'] p,ak-empty-state [slot='body'] *,.pf-c-form__helper-text.pf-m-error,p.pf-m-error{display:revert!important;visibility:visible!important;opacity:1!important;height:auto!important;overflow:visible!important}",
   "ak-empty-state [slot='body'] p,.pf-c-form__helper-text.pf-m-error{color:#b1151c!important;font-size:0.9rem!important}",
-  "@media (prefers-color-scheme: dark){ak-empty-state [slot='body'] p,.pf-c-form__helper-text.pf-m-error{color:#ff6b6b!important}}"
+  "@media (prefers-color-scheme: dark){ak-empty-state [slot='body'] p,.pf-c-form__helper-text.pf-m-error{color:#ff6b6b!important}}",
+".pf-c-input-group{display:flex!important;width:100%!important;align-items:stretch!important;position:relative!important;box-shadow:none!important;outline:none!important;box-sizing:border-box!important}",
+".pf-c-input-group>.pf-c-form-control,.pf-c-input-group>input:not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]){flex:1 1 auto!important;width:0!important;min-width:0!important;border-top-right-radius:0!important;border-bottom-right-radius:0!important;border-right:none!important}",
+".pf-c-input-group>.pf-c-button,.pf-c-input-group>button{border-top-left-radius:0!important;border-bottom-left-radius:0!important;border-left:1px solid rgba(0,0,0,0.15)!important;box-shadow:none!important;outline:none!important}",
+".pf-c-input-group>.pf-c-button::after,.pf-c-input-group>button::after{display:none!important;content:none!important;border:none!important}",
+".pf-c-input-group:focus-within>.pf-c-form-control,.pf-c-input-group:focus-within>input,.pf-c-input-group:focus-within>.pf-c-button,.pf-c-input-group:focus-within>button{border-color:var(--cs-btn)!important;box-shadow:none!important;outline:none!important}",
+"input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus,input:-webkit-autofill:active{-webkit-box-shadow:0 0 0 1000px rgba(255,255,255,0.8) inset!important;box-shadow:0 0 0 1000px rgba(255,255,255,0.8) inset!important;-webkit-text-fill-color:#111!important;caret-color:#111!important;transition:background-color 50000s ease-in-out 0s!important}",
+"@media (prefers-color-scheme: dark){input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus,input:-webkit-autofill:active{-webkit-box-shadow:0 0 0 1000px rgba(50,50,50,0.8) inset!important;box-shadow:0 0 0 1000px rgba(50,50,50,0.8) inset!important;-webkit-text-fill-color:#f0f0f0!important;caret-color:#f0f0f0!important}}",
+":host{--pf-global--Color--100:var(--cs-text-secondary)!important;--pf-global--Color--200:var(--cs-text-secondary)!important;--pf-global--Color--300:var(--cs-text-secondary)!important}",
+".pf-c-form__helper-text:not(.pf-m-error),.pf-c-check__label,.pf-c-radio__label,.pf-c-form__group-label-help,.pf-c-content,.pf-c-content p{color:var(--cs-text-secondary)!important}"
 ].join('');
 
 var CUSTOM_TRANSLATIONS = {};
@@ -568,7 +641,19 @@ var TRANSLATIONS = Object.assign({
     "capitalization doesn't help very much": "Usar mayúsculas no ayuda mucho",
     "all-uppercase is almost as easy to guess as all-lowercase": "Todo en mayúsculas es casi tan fácil de adivinar como todo en minúsculas",
     "reversed words aren't much harder to guess": "Las palabras escritas al revés no son mucho más difíciles de adivinar",
-    "predictable substitutions like '@' instead of 'a' don't help very much": "Las sustituciones predecibles como '@' en lugar de 'a' no ayudan mucho"
+    "predictable substitutions like '@' instead of 'a' don't help very much": "Las sustituciones predecibles como '@' en lugar de 'a' no ayudan mucho",
+    // Authentik junta los campos configurados del stage de identificacion con
+    // " or " sin traducir (viene de su propio codigo, no del catalogo i18n que
+    // si aplica al resto del stage) -- cubre label y placeholder (mismo nodo
+    // de texto) y el fallback en ingles por si el orden de campos cambia.
+    "correo or nombre usuario": "Correo o nombre de usuario",
+    "nombre usuario or correo": "Nombre de usuario o correo",
+    "email or username": "Correo o nombre de usuario",
+    "username or email": "Nombre de usuario o correo",
+    // Stage de validacion MFA (TOTP) -- halladas probando la pantalla real con
+    // Playwright, nunca se habian visto en espanol antes de hoy.
+    "type an authentication code...": "Escribe un código de autenticación...",
+    "open your authenticator app to retrieve a one-time use code.": "Abre tu aplicación de autenticación para obtener un código de un solo uso."
 }, CUSTOM_TRANSLATIONS);
 
 // Apps con flow de registro dedicado (uno por app_slug, ver
@@ -1347,24 +1432,86 @@ new MutationObserver(function(){scan(document);}).observe(document.documentEleme
                 width: 100% !important;
                 box-sizing: border-box !important;
             }
+            /* Esta plantilla (colores ya resueltos por tenant) no tenía variante
+               oscura -- al cargar pisaba SIEMPRE el fondo oscuro que ECSS aplicaba
+               antes de que el tema llegara, dejando los inputs claros aunque el SO
+               estuviera en modo oscuro (misma especificidad + !important => gana
+               el que se inyecta después en el DOM, que era este). */
+            @media (prefers-color-scheme: dark) {
+                .pf-c-form-control,
+                input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+                    background: rgba(50,50,50,0.8) !important;
+                    border-color: rgba(255,255,255,0.2) !important;
+                    color: #f0f0f0 !important;
+                }
+            }
+            /* ── Legibilidad de textos nativos de Authentik en modo oscuro del SO ──
+               PatternFly usa --pf-global--Color--100/200/300 para textos de ayuda
+               y descripciones de consentimiento; en modo oscuro quedan casi
+               blancos sobre nuestra tarjeta clara (ilegibles). Reutiliza la misma
+               variable que ya usan #cs-form-subtitle/#cs-title. */
+            :host {
+                --pf-global--Color--100: var(--cs-text-secondary) !important;
+                --pf-global--Color--200: var(--cs-text-secondary) !important;
+                --pf-global--Color--300: var(--cs-text-secondary) !important;
+            }
+            .pf-c-form__helper-text:not(.pf-m-error),
+            .pf-c-check__label, .pf-c-radio__label,
+            .pf-c-form__group-label-help,
+            .pf-c-content, .pf-c-content p {
+                color: var(--cs-text-secondary) !important;
+            }
             .pf-c-form-control:focus,
             input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus {
                 border-color: ${primary} !important;
                 box-shadow: 0 0 0 3px ${primary}33 !important;
                 outline: none !important;
             }
-            /* ── Corrección de diseño e integración del Ojo de Contraseña (input-group) ── */
+            /* Autofill de Chrome/Edge tapa el fondo con un inset shadow del color
+               que decide el navegador (amarillo/azul) — lo forzamos a juego con
+               el input real, en claro y oscuro. */
+            input:-webkit-autofill,
+            input:-webkit-autofill:hover,
+            input:-webkit-autofill:focus,
+            input:-webkit-autofill:active {
+                -webkit-box-shadow: 0 0 0 1000px rgba(255,255,255,0.8) inset !important;
+                box-shadow: 0 0 0 1000px rgba(255,255,255,0.8) inset !important;
+                -webkit-text-fill-color: #111 !important;
+                caret-color: #111 !important;
+                transition: background-color 50000s ease-in-out 0s !important;
+            }
+            @media (prefers-color-scheme: dark) {
+                input:-webkit-autofill,
+                input:-webkit-autofill:hover,
+                input:-webkit-autofill:focus,
+                input:-webkit-autofill:active {
+                    -webkit-box-shadow: 0 0 0 1000px rgba(50,50,50,0.8) inset !important;
+                    box-shadow: 0 0 0 1000px rgba(50,50,50,0.8) inset !important;
+                    -webkit-text-fill-color: #f0f0f0 !important;
+                    caret-color: #f0f0f0 !important;
+                }
+            }
+            /* ── Corrección de diseño e integración del Ojo de Contraseña (input-group) ──
+               input/botón tratados como una sola pieza: el input pierde su borde
+               derecho, el botón su radio izquierdo, y el único borde visible entre
+               ambos es el divisor de 1px del botón. :focus-within sincroniza el
+               color de foco en AMBOS (antes solo el input lo recibía, por eso el
+               halo de foco se cortaba justo en la unión con el botón del ojo). */
             .pf-c-input-group {
                 display: flex !important;
                 width: 100% !important;
+                align-items: stretch !important;
+                position: relative !important;
+                box-sizing: border-box !important;
             }
             .pf-c-input-group > .pf-c-form-control,
             .pf-c-input-group > input {
                 flex: 1 1 auto !important;
-                width: auto !important;
+                width: 0 !important;
                 min-width: 0 !important;
                 border-top-right-radius: 0 !important;
                 border-bottom-right-radius: 0 !important;
+                border-right: none !important;
             }
             .pf-c-input-group > .pf-c-button,
             .pf-c-input-group > button {
@@ -1373,12 +1520,40 @@ new MutationObserver(function(){scan(document);}).observe(document.documentEleme
                 border-top-right-radius: 8px !important;
                 border-bottom-right-radius: 8px !important;
                 border: 1.5px solid rgba(0,0,0,0.15) !important;
-                border-left: none !important;
+                border-left: 1px solid rgba(0,0,0,0.15) !important;
                 background: rgba(255,255,255,0.8) !important;
                 padding: 0 0.85rem !important;
                 display: flex !important;
                 align-items: center !important;
                 justify-content: center !important;
+                box-shadow: none !important;
+                outline: none !important;
+            }
+            .pf-c-input-group > .pf-c-button::after,
+            .pf-c-input-group > button::after {
+                display: none !important;
+                content: none !important;
+                border: none !important;
+            }
+            .pf-c-input-group:focus-within > .pf-c-form-control,
+            .pf-c-input-group:focus-within > input,
+            .pf-c-input-group:focus-within > .pf-c-button,
+            .pf-c-input-group:focus-within > button {
+                border-color: ${primary} !important;
+                box-shadow: none !important;
+                outline: none !important;
+            }
+            .pf-c-input-group > :only-child {
+                border-radius: 8px !important;
+                border-right: 1.5px solid rgba(0,0,0,0.15) !important;
+            }
+            @media (prefers-color-scheme: dark) {
+                .pf-c-input-group > .pf-c-button,
+                .pf-c-input-group > button {
+                    background: rgba(50,50,50,0.8) !important;
+                    border-color: rgba(255,255,255,0.2) !important;
+                    color: #f0f0f0 !important;
+                }
             }
             /* ── Footer "¿Olvidaste tu contraseña?" ── */
             .pf-c-login__main-footer, [class*="main-footer"] {

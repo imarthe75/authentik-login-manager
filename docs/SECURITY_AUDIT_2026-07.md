@@ -67,7 +67,7 @@ malicioso en la página de login real (auth.casmart.internal)
 
 ### Data Protection (PII / GDPR / LFPDPPP)
 
-- El SMTP real (`arquitecturacasmarts@gmail.com` + app password) quedó en el **historial de git** (commit `93700f1`) — dato de acceso a cuenta de correo corporativa expuesto de forma persistente en el repositorio.
+- El SMTP real (`<correo-corporativo-redactado>` + app password) quedó en el **historial de git** (commit `93700f1`) — dato de acceso a cuenta de correo corporativa expuesto de forma persistente en el repositorio.
 - `body_html` de correos puede contener PII de usuarios (nombres, emails) sin controles de retención/anonimización documentados.
 - Sin política de minimización: `log.error` puede volcar excepciones completas que incluyan fragmentos de datos sensibles.
 
@@ -149,7 +149,7 @@ Todos los fixes se probaron contra los contenedores reconstruidos y reiniciados:
 
 ## ⚠️ Acciones que requieren intervención manual (no puedo ejecutarlas)
 
-1. **Rotar la contraseña de aplicación de Gmail** (`arquitecturacasmarts@gmail.com`) — quedó expuesta en el historial de git (commit `93700f1`). Debe generarse una nueva App Password en la cuenta de Google y actualizar `.env`.
+1. **Rotar la contraseña de aplicación de Gmail** (`<correo-corporativo-redactado>`) — quedó expuesta en el historial de git (commit `93700f1`). Debe generarse una nueva App Password en la cuenta de Google y actualizar `.env`.
 2. **Purgar el historial de git** de los commits que contienen `.env` con secretos reales (`git filter-repo` o BFG Repo-Cleaner) — es una operación destructiva/irreversible sobre el historial que requiere coordinación con el equipo (reescribe hashes, afecta a quien tenga el repo clonado) y posible force-push. No la ejecuto sin tu confirmación explícita.
 3. **Rotar `ADMIN_API_KEY`** en producción tras el fix — el valor actual estuvo expuesto en el bundle del frontend; aunque el fix rompe la vía de explotación (XSS→lectura del bundle), el valor en sí ya pudo haber sido observado por cualquiera que abriera DevTools. Recomiendo generar uno nuevo y actualizar `.env` + reiniciar.
 4. **Aislamiento de red entre servicios** (`identity-network`): el backend de login-manager comparte esa red Docker con Authentik, Vault, login-designer y otros servicios sin ningún tipo de segmentación — cualquier contenedor de esa red puede alcanzar `casmarts-login-backend:8000` directamente. El fix aplicado (`_is_trusted_proxy_peer`, ver abajo) cierra el vector de explotación concreto (spoofing de tenant), pero la falta de aislamiento de red en sí sigue siendo una superficie de ataque más amplia (ej. si otro servicio de esa red es comprometido, podría alcanzar el backend directamente para otros fines). Solucionarlo de raíz requiere segmentar la red Docker (ej. separar una red "datos" interna de una red "gateway"), un cambio que toca la topología de *todos* los servicios del ecosistema — no lo apliqué por su alcance y blast radius; requiere planificación y pruebas coordinadas con cada servicio.

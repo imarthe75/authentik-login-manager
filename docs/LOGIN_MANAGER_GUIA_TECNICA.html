@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login Manager</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --bg:#F6F7FA;
+  --surface:#FFFFFF;
+  --text:#1B2430;
+  --text-muted:#5B6676;
+  --border:#DFE3EA;
+  --accent:#35519E;
+  --accent-strong:#243A73;
+  --accent-soft:#E8EDF9;
+  --mono-bg:#10172A;
+  --mono-text:#D8E1F0;
+  --mono-border:#283552;
+  --warn:#9A5B1E;
+  --warn-soft:#FBF1E6;
+  --warn-border:#E7CBA3;
+  --safe:#2F7A4F;
+  --safe-soft:#EAF5EE;
+  --safe-border:#BFE0CC;
+  --shadow: 0 1px 2px rgba(20,30,50,0.06), 0 8px 24px rgba(20,30,50,0.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1420;
+    --surface:#161D2C;
+    --text:#E7EAF0;
+    --text-muted:#9AA6B8;
+    --border:#2A3345;
+    --accent:#88A6EE;
+    --accent-strong:#B7CBFA;
+    --accent-soft:#1D2740;
+    --mono-bg:#0A0E18;
+    --mono-text:#D8E1F0;
+    --mono-border:#232E48;
+    --warn:#E3A565;
+    --warn-soft:#2E2414;
+    --warn-border:#5A4426;
+    --safe:#7FD3A3;
+    --safe-soft:#15271D;
+    --safe-border:#2C4A39;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1420;
+  --surface:#161D2C;
+  --text:#E7EAF0;
+  --text-muted:#9AA6B8;
+  --border:#2A3345;
+  --accent:#88A6EE;
+  --accent-strong:#B7CBFA;
+  --accent-soft:#1D2740;
+  --mono-bg:#0A0E18;
+  --mono-text:#D8E1F0;
+  --mono-border:#232E48;
+  --warn:#E3A565;
+  --warn-soft:#2E2414;
+  --warn-border:#5A4426;
+  --safe:#7FD3A3;
+  --safe-soft:#15271D;
+  --safe-border:#2C4A39;
+  --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Source Sans 3',ui-sans-serif,system-ui,sans-serif;
+  font-size:16px;
+  line-height:1.6;
+}
+h1,h2,h3{
+  font-family:'Zilla Slab',Georgia,serif;
+  color:var(--text);
+  text-wrap:balance;
+  margin:0;
+}
+code, .mono, .path, .badge, .kbd, table{
+  font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+a{ color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-soft); }
+a:hover{ border-bottom-color:var(--accent); }
+::selection{ background:var(--accent-soft); }
+
+.shell{
+  display:grid;
+  grid-template-columns: 240px minmax(0,1fr);
+  gap:0;
+  max-width:1180px;
+  margin:0 auto;
+}
+
+/* ---- header / masthead ---- */
+.masthead{
+  grid-column: 1 / -1;
+  padding: 2.75rem clamp(1.25rem,4vw,3rem) 1.75rem;
+  border-bottom:1px solid var(--border);
+}
+.masthead .eyebrow{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:0.72rem;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  color:var(--accent);
+  margin-bottom:0.6rem;
+  display:block;
+}
+.masthead h1{
+  font-size:clamp(2rem,4vw,2.65rem);
+  font-weight:700;
+  letter-spacing:-0.01em;
+}
+.masthead p.sub{
+  margin-top:0.65rem;
+  color:var(--text-muted);
+  font-size:1.05rem;
+  max-width:62ch;
+}
+.meta-row{
+  margin-top:1.25rem;
+  display:flex;
+  gap:1.5rem;
+  flex-wrap:wrap;
+  font-size:0.82rem;
+  color:var(--text-muted);
+}
+.meta-row strong{ color:var(--text); font-weight:600; }
+
+/* ---- side nav ---- */
+nav.toc{
+  padding: 2rem 1.25rem 2rem clamp(1.25rem,4vw,3rem);
+  position:sticky;
+  top:0;
+  align-self:start;
+  height:100vh;
+  overflow-y:auto;
+}
+nav.toc ol{
+  list-style:none;
+  margin:0; padding:0;
+  display:flex; flex-direction:column; gap:0.15rem;
+  counter-reset: toc;
+}
+nav.toc li{ counter-increment: toc; }
+nav.toc a{
+  display:flex;
+  gap:0.6rem;
+  align-items:baseline;
+  padding:0.45rem 0.5rem;
+  border-radius:6px;
+  border-bottom:none;
+  color:var(--text-muted);
+  font-size:0.88rem;
+  line-height:1.3;
+}
+nav.toc a:hover{ background:var(--accent-soft); color:var(--text); }
+nav.toc a::before{
+  content: counter(toc, decimal-leading-zero);
+  font-family:'IBM Plex Mono',monospace;
+  font-size:0.72rem;
+  color:var(--accent);
+  flex-shrink:0;
+}
+
+/* ---- main content ---- */
+main{
+  padding: 2.5rem clamp(1.25rem,4vw,3rem) 5rem;
+  min-width:0;
+}
+section{
+  max-width:780px;
+  margin-bottom:3.25rem;
+  scroll-margin-top:1.5rem;
+}
+section h2{
+  font-size:1.5rem;
+  font-weight:700;
+  display:flex;
+  align-items:baseline;
+  gap:0.6rem;
+  margin-bottom:1rem;
+}
+section h2 .num{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:0.95rem;
+  color:var(--accent);
+  font-weight:500;
+}
+section h3{
+  font-size:1.08rem;
+  font-weight:600;
+  margin:1.6rem 0 0.6rem;
+}
+section p{ margin:0.75rem 0; color:var(--text); }
+section p.lead{ color:var(--text-muted); font-size:1.02rem; }
+ul.clean, ol.clean{ margin:0.75rem 0; padding-left:1.2rem; }
+ul.clean li, ol.clean li{ margin-bottom:0.5rem; }
+
+.path{
+  background:var(--accent-soft);
+  color:var(--accent-strong);
+  padding:0.12rem 0.4rem;
+  border-radius:4px;
+  font-size:0.86em;
+  white-space:nowrap;
+}
+
+pre{
+  background:var(--mono-bg);
+  color:var(--mono-text);
+  border:1px solid var(--mono-border);
+  border-radius:10px;
+  padding:1rem 1.1rem;
+  overflow-x:auto;
+  font-size:0.84rem;
+  line-height:1.55;
+  margin:1rem 0;
+}
+pre code{ background:none; padding:0; color:inherit; }
+
+/* ---- callouts ---- */
+.callout{
+  border:1px solid var(--border);
+  border-left:4px solid var(--accent);
+  background:var(--surface);
+  border-radius:8px;
+  padding:0.9rem 1.1rem;
+  margin:1.1rem 0;
+  box-shadow:var(--shadow);
+}
+.callout .label{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:0.72rem;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  font-weight:600;
+  display:block;
+  margin-bottom:0.35rem;
+}
+.callout.warn{ border-left-color:var(--warn); background:var(--warn-soft); border-color:var(--warn-border); }
+.callout.warn .label{ color:var(--warn); }
+.callout.safe{ border-left-color:var(--safe); background:var(--safe-soft); border-color:var(--safe-border); }
+.callout.safe .label{ color:var(--safe); }
+.callout p{ margin:0.3rem 0; font-size:0.94rem; }
+
+/* ---- badges ---- */
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:0.3rem;
+  font-size:0.72rem;
+  font-weight:600;
+  letter-spacing:0.04em;
+  text-transform:uppercase;
+  padding:0.2rem 0.55rem;
+  border-radius:100px;
+  border:1px solid transparent;
+}
+.badge.safe{ background:var(--safe-soft); color:var(--safe); border-color:var(--safe-border); }
+.badge.warn{ background:var(--warn-soft); color:var(--warn); border-color:var(--warn-border); }
+
+/* ---- reference table ---- */
+table.ref{
+  width:100%;
+  border-collapse:collapse;
+  margin:1rem 0;
+  font-size:0.84rem;
+}
+table.ref th, table.ref td{
+  text-align:left;
+  padding:0.55rem 0.7rem;
+  border-bottom:1px solid var(--border);
+  vertical-align:top;
+}
+table.ref th{
+  font-family:'Source Sans 3',sans-serif;
+  font-size:0.74rem;
+  text-transform:uppercase;
+  letter-spacing:0.06em;
+  color:var(--text-muted);
+  font-weight:600;
+}
+table.ref td.p{ color:var(--accent-strong); }
+.table-wrap{ overflow-x:auto; }
+
+/* ---- diagram card ---- */
+.diagram-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:1.25rem 1.25rem 0.5rem;
+  box-shadow:var(--shadow);
+  margin:1.25rem 0;
+}
+figure{ margin:0; }
+figcaption{
+  color:var(--text-muted);
+  font-size:0.82rem;
+  margin-top:0.6rem;
+  padding-top:0.6rem;
+  border-top:1px solid var(--border);
+}
+svg text{ font-family:'IBM Plex Mono',monospace; fill:currentColor; }
+svg .lbl{ font-size:11px; fill:var(--text-muted); }
+svg .node-title{ font-size:12.5px; font-weight:600; fill:var(--text); font-family:'Source Sans 3',sans-serif; }
+svg .node-sub{ font-size:10.5px; fill:var(--text-muted); }
+
+footer.colophon{
+  grid-column:1/-1;
+  padding:2rem clamp(1.25rem,4vw,3rem) 3rem;
+  border-top:1px solid var(--border);
+  color:var(--text-muted);
+  font-size:0.82rem;
+}
+
+@media (max-width: 860px){
+  .shell{ grid-template-columns: 1fr; }
+  nav.toc{ position:static; height:auto; padding: 1.5rem clamp(1.25rem,4vw,3rem) 0; }
+  nav.toc ol{ flex-direction:row; flex-wrap:wrap; }
+}
+</style>
+</head>
+<body>
+
+
+<div class="shell">
+
+  <div class="masthead">
+    <span class="eyebrow">Documento técnico interno · CaSmartS</span>
+    <h1>Login Manager</h1>
+    <p class="sub">Qué es, dónde vive cada pieza y a qué apunta técnicamente dentro de Authentik — con especial atención a la capa de responsividad, que es donde más se ha roto algo sin querer.</p>
+    <div class="meta-row">
+      <span><strong>Para:</strong> equipo de diseño / frontend</span>
+      <span><strong>Sistema:</strong> auth.casmart.internal</span>
+      <span><strong>Actualizado:</strong> 29 octubre 2026</span>
+    </div>
+  </div>
+
+  <nav class="toc">
+    <ol>
+      <li><a href="#que-es">Qué es Login Manager</a></li>
+      <li><a href="#arquitectura">Arquitectura, en 4 piezas</a></li>
+      <li><a href="#integraciones">Qué toca cada integración</a></li>
+      <li><a href="#dos-motores">Los dos motores de marca</a></li>
+      <li><a href="#donde-vive">Dónde vive cada archivo</a></li>
+      <li><a href="#responsividad">La capa de responsividad</a></li>
+      <li><a href="#reglas">Reglas antes de tocar el CSS</a></li>
+      <li><a href="#flujo">Cómo hacer un cambio sin romper nada</a></li>
+      <li><a href="#referencia">Referencia rápida</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <section id="que-es">
+      <h2><span class="num">01</span> Qué es Login Manager</h2>
+      <p class="lead">Un panel interno que le pone "piel" a las pantallas de Authentik (login, branding, mensajes) sin que nadie tenga que editar código ni redesplegar contenedores cada vez que cambia un logo o un color.</p>
+      <p>Un administrador entra al panel, elige un <em>flow</em> y una app (ej. Starter, TECA, Centinela), y define: logos, colores, tipografías, fondo, textos del sistema y avisos de privacidad. Al guardar, eso queda en base de datos — <strong>no</strong> se "pinta" un archivo nuevo cada vez. La pantalla de login real lo recoge en el momento en que alguien la abre.</p>
+      <p>Por eso Daniel puede cambiar una marca completa desde el panel sin tocar una sola línea de código — y por eso, al revés, un cambio de <em>layout</em> (como la responsividad) no se hace desde el panel: vive en el código de la plantilla, no en la base de datos.</p>
+    </section>
+
+    <section id="arquitectura">
+      <h2><span class="num">02</span> Arquitectura, en 4 piezas</h2>
+      <p class="lead">Cuando alguien abre la pantalla de login, el navegador hace una llamada en vivo al API de Login Manager para pedir "¿cómo se ve esto?". No hay un paso de "publicar" que genere un archivo estático — el tema se lee fresco en cada visita.</p>
+
+      <div class="diagram-card">
+        <figure>
+          <svg viewBox="0 0 740 330" role="img" aria-label="El navegador carga la plantilla flow.html desde Authentik, y esa misma plantilla pide el tema en vivo al backend de Login Manager, que lo lee de PostgreSQL con Valkey como caché">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+
+            <!-- Browser -->
+            <rect x="20" y="30" width="160" height="64" rx="8" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="100" y="56" text-anchor="middle" class="node-title">Navegador</text>
+            <text x="100" y="74" text-anchor="middle" class="node-sub">/if/flow/…</text>
+
+            <!-- Authentik -->
+            <rect x="20" y="140" width="160" height="64" rx="8" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="100" y="166" text-anchor="middle" class="node-title">Authentik</text>
+            <text x="100" y="184" text-anchor="middle" class="node-sub">sirve flow.html</text>
+
+            <!-- Backend -->
+            <rect x="300" y="140" width="190" height="64" rx="8" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="395" y="166" text-anchor="middle" class="node-title">Login Manager API</text>
+            <text x="395" y="184" text-anchor="middle" class="node-sub">casmarts-login-backend</text>
+
+            <!-- Postgres -->
+            <rect x="300" y="250" width="190" height="60" rx="8" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="395" y="275" text-anchor="middle" class="node-title">PostgreSQL</text>
+            <text x="395" y="292" text-anchor="middle" class="node-sub">tabla tenant_themes</text>
+
+            <!-- Valkey -->
+            <rect x="550" y="140" width="170" height="64" rx="8" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="635" y="166" text-anchor="middle" class="node-title">Valkey</text>
+            <text x="635" y="184" text-anchor="middle" class="node-sub">caché de tema</text>
+
+            <!-- Admin panel -->
+            <rect x="550" y="30" width="170" height="64" rx="8" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="635" y="56" text-anchor="middle" class="node-title">Panel admin</text>
+            <text x="635" y="74" text-anchor="middle" class="node-sub">loginmanager.casmart.internal</text>
+
+            <!-- arrows -->
+            <line x1="100" y1="94" x2="100" y2="140" stroke="currentColor" stroke-width="1.4" marker-end="url(#arrow)"/>
+            <text x="112" y="120" class="lbl">GET pantalla</text>
+
+            <line x1="180" y1="172" x2="300" y2="172" stroke="currentColor" stroke-width="1.4" marker-end="url(#arrow)"/>
+            <text x="190" y="163" class="lbl">fetch tema (en el navegador)</text>
+
+            <line x1="395" y1="204" x2="395" y2="250" stroke="currentColor" stroke-width="1.4" marker-end="url(#arrow)"/>
+            <text x="407" y="230" class="lbl">lee si no hay caché</text>
+
+            <line x1="490" y1="172" x2="550" y2="172" stroke="currentColor" stroke-width="1.4" marker-end="url(#arrow)"/>
+            <text x="498" y="163" class="lbl">guarda / consulta</text>
+
+            <line x1="635" y1="94" x2="635" y2="140" stroke="currentColor" stroke-width="1.4" marker-end="url(#arrow)"/>
+            <text x="647" y="120" class="lbl">escribe tema</text>
+          </svg>
+        </figure>
+        <figcaption>El panel admin solo escribe filas en PostgreSQL. La pantalla de login las lee en vivo (con Valkey de caché) cada vez que alguien la abre — por eso un cambio de marca aparece sin "publicar" nada.</figcaption>
+      </div>
+
+      <ul class="clean">
+        <li><strong>Panel admin</strong> — React, contenedor <code>casmarts-login-frontend</code>, expuesto en <span class="path">https://loginmanager.casmart.internal</span>.</li>
+        <li><strong>API</strong> — FastAPI, contenedor <code>casmarts-login-backend</code>. Expone <span class="path">/api/v1/themes/…</span> (admin) y <span class="path">/lm/api/v1/public/theme/…</span> (lo que consume la pantalla de login, sin autenticación, solo lectura).</li>
+        <li><strong>PostgreSQL</strong> — base <code>authentik_login_manager</code>, tablas <code>tenant_themes</code> (colores, logos, tipografías por flow/app) y <code>tenant_applications</code> (qué app pertenece a qué tenant).</li>
+        <li><strong>Valkey</strong> — caché del tema resuelto, por <code>tenant_id + flow_slug + app</code>. Se invalida sola al guardar desde el panel.</li>
+      </ul>
+    </section>
+
+    <section id="integraciones">
+      <h2><span class="num">03</span> Qué toca cada integración con Authentik</h2>
+      <p class="lead">Esto es lo importante si alguien quiere replicar el patrón de Login Manager para otro sistema (no solo para Authentik): no es "un panel que guarda cosas en su base y ya". Toca a Authentik por <strong>tres caminos distintos</strong>, con tres niveles de riesgo distintos.</p>
+
+      <div class="diagram-card">
+        <figure>
+          <svg viewBox="0 0 760 300" role="img" aria-label="Login Manager se conecta con Authentik por tres caminos: SQL directo contra el mismo Postgres en ambas direcciones, llamadas REST con token hacia Authentik, y un webhook entrante desde Authentik">
+            <defs>
+              <marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+
+            <rect x="20" y="20" width="210" height="260" rx="10" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="125" y="50" text-anchor="middle" class="node-title">Login Manager</text>
+            <text x="125" y="68" text-anchor="middle" class="node-sub">backend FastAPI</text>
+            <text x="125" y="84" text-anchor="middle" class="node-sub">+ Postgres propio</text>
+
+            <rect x="530" y="20" width="210" height="260" rx="10" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="635" y="50" text-anchor="middle" class="node-title">Authentik</text>
+            <text x="635" y="68" text-anchor="middle" class="node-sub">Postgres propio</text>
+            <text x="635" y="84" text-anchor="middle" class="node-sub">+ REST API + Eventos</text>
+
+            <line x1="230" y1="140" x2="530" y2="140" stroke="currentColor" stroke-width="1.4" marker-start="url(#arrow2)" marker-end="url(#arrow2)"/>
+            <text x="380" y="127" text-anchor="middle" class="lbl">SQL directo — mismo Postgres, otra base</text>
+            <text x="380" y="156" text-anchor="middle" class="lbl">lee apps/grupos/brands · escribe scope descriptions</text>
+
+            <line x1="230" y1="195" x2="530" y2="195" stroke="currentColor" stroke-width="1.4" marker-end="url(#arrow2)"/>
+            <text x="380" y="182" text-anchor="middle" class="lbl">REST API, token Bearer</text>
+            <text x="380" y="211" text-anchor="middle" class="lbl">Brand.favicon · PasswordPolicy/Stage · Blueprint</text>
+
+            <line x1="530" y1="250" x2="230" y2="250" stroke="currentColor" stroke-width="1.4" marker-end="url(#arrow2)"/>
+            <text x="380" y="237" text-anchor="middle" class="lbl">Webhook entrante, secreto compartido</text>
+            <text x="380" y="266" text-anchor="middle" class="lbl">evento real (alta, login fallido…) → dispara email</text>
+          </svg>
+        </figure>
+        <figcaption>Tres mecanismos independientes, cada uno con su propio punto de falla: una consulta SQL directa no avisa si Authentik cambia su esquema; una llamada REST sí falla con un código de error visible; un webhook depende de que el secreto compartido siga coincidiendo en ambos lados.</figcaption>
+      </div>
+
+      <h3>1. SQL directo contra la base de Authentik (el más frágil)</h3>
+      <p>El backend abre un <em>segundo</em> engine de SQLAlchemy apuntando a la base <code>authentik</code> en el mismo PostgreSQL — toma la misma <code>DATABASE_URL</code> y le cambia el nombre de la base:</p>
+      <pre><code>authentik_engine = create_async_engine(
+    settings.DATABASE_URL.replace("authentik_login_manager", "authentik"),
+    ...
+)</code></pre>
+      <p>Con esa conexión, Login Manager consulta tablas internas de Authentik por SQL crudo, <strong>sin pasar por su API ni su ORM</strong> (archivo entre paréntesis):</p>
+      <div class="table-wrap">
+      <table class="ref">
+        <thead><tr><th>Qué hace</th><th>Tabla de Authentik</th><th>Dónde</th></tr></thead>
+        <tbody>
+          <tr><td>Resuelve <code>client_id</code> de OAuth → slug de app (para saber qué tema pintar)</td><td class="p">authentik_core_application<br>authentik_providers_oauth2_oauth2provider</td><td class="p">public.py — resolve_app_slug()</td></tr>
+          <tr><td>Lista todas las apps para la pestaña "Aplicaciones"</td><td class="p">authentik_core_application</td><td class="p">admin.py — _fetch_authentik_apps()</td></tr>
+          <tr><td>Lee nombres de grupo para auto-enlazar app → tenant por convención</td><td class="p">authentik_core_group</td><td class="p">admin.py — _auto_link_unassigned_applications()</td></tr>
+          <tr><td>Sincroniza marcas (Brands) de Authentik → tabla local <code>tenants</code></td><td class="p">authentik_brands_brand</td><td class="p">admin.py — _sync_tenants_from_authentik()</td></tr>
+          <tr><td><strong>Escribe</strong> descripciones de scope de consentimiento</td><td class="p">authentik_providers_oauth2_scopemapping <span class="badge warn">UPDATE</span></td><td class="p">admin.py — _update_authentik_scope_descriptions()</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="callout warn">
+        <span class="label">El punto de mayor riesgo de todo el sistema</span>
+        <p>Esto es un acoplamiento directo al esquema interno de Authentik. Si una actualización de Authentik renombra una columna o tabla, estas consultas truenan en producción sin ningún aviso de "API deprecada" — nadie versiona un esquema de base de datos interno. Para replicar este patrón en otro sistema, usar SQL directo solo para <strong>lectura</strong> de datos estables (como aquí, nombres/slugs), y evitar escrituras directas si el sistema objetivo ofrece una API — la única escritura SQL que existe hoy (scope descriptions) es candidata a migrarse a REST si Authentik alguna vez expone ese campo por API.</p>
+      </div>
+
+      <h3>2. REST API de Authentik con token (push, el camino "correcto")</h3>
+      <p>Para todo lo que Authentik sí expone por API, Login Manager usa <code>AUTHENTIK_API_TOKEN</code> contra <code>AUTHENTIK_HOST</code> con <code>httpx</code>:</p>
+      <div class="table-wrap">
+      <table class="ref">
+        <thead><tr><th>Qué configura</th><th>Endpoint de Authentik</th><th>Dónde</th></tr></thead>
+        <tbody>
+          <tr><td>Favicon del tema global → Brand nativo</td><td class="p">PATCH /api/v3/core/brands/{id}/</td><td class="p">admin.py — _push_favicon_to_authentik_brand()</td></tr>
+          <tr><td>Política de contraseñas (longitud, símbolos, HIBP, zxcvbn)</td><td class="p">/api/v3/policies/password/, /stages/prompt/prompts/, /stages/email/, /policies/reputation/, /policies/password_expiry/, /policies/bindings/</td><td class="p">password_policy.py — _push_to_authentik()</td></tr>
+          <tr><td>Alta de marca nueva: crea Brand + grupo padre + subgrupos por app</td><td class="p">POST /api/v3/managed/blueprints/ (+ /apply/)</td><td class="p">admin.py — apply_brand_blueprint()</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>El patrón de todas estas funciones es el mismo: <strong>nunca lanzan excepción hacia el usuario</strong> — si Authentik no responde, el cambio se guarda igual en la base local de Login Manager y se devuelve <code>(ok=False, error="...")</code> para mostrarlo como advertencia en el panel. Así un administrador nunca pierde su trabajo solo porque Authentik estaba lento o caído en ese momento.</p>
+
+      <h3>3. Webhook entrante — Authentik llama a Login Manager</h3>
+      <p>Es el único camino en sentido contrario. Authentik dispara un <code>NotificationTransport</code> tipo webhook por cada evento real (alta de cuenta, login fallido, cambio de contraseña…) hacia <span class="path">POST /api/v1/webhooks/authentik-event</span>, con un secreto compartido en el header <code>X-Webhook-Secret</code> (<code>AUTHENTIK_WEBHOOK_SECRET</code>, comparado con <code>secrets.compare_digest</code> — nunca con <code>==</code>, para evitar timing attacks). El handler resuelve a qué tenant/app pertenece el evento, elige la plantilla correspondiente de Vista Correo (tabla <code>tenant_email_bodies</code>) y manda el correo por SMTP.</p>
+
+      <h3>El esquema propio de Login Manager</h3>
+      <p>Todo lo anterior existe para alimentar estas 5 tablas en <code>authentik_login_manager</code> (base propia, nada que ver con la base <code>authentik</code>):</p>
+      <div class="table-wrap">
+      <table class="ref">
+        <thead><tr><th>Tabla</th><th>Para qué</th><th>Llave de identidad</th></tr></thead>
+        <tbody>
+          <tr><td><code>tenants</code></td><td>Espejo local de cada Brand de Authentik (nombre, dominio, colores de acento del propio panel)</td><td class="p">id = brand_uuid de Authentik</td></tr>
+          <tr><td><code>tenant_themes</code></td><td>Todo lo visual: colores, logos, tipografías, textos, qué elementos se muestran — una fila por flow y, opcionalmente, por app</td><td class="p">tenant_id + authentik_flow_slug + authentik_app_slug</td></tr>
+          <tr><td><code>tenant_applications</code></td><td>Qué app de Authentik pertenece a qué tenant (manual o por convención de nombre de grupo)</td><td class="p">tenant_id + application_slug</td></tr>
+          <tr><td><code>tenant_email_bodies</code></td><td>Cuerpo de cada correo transaccional (13 tipos de evento) por tenant/flow</td><td class="p">tenant_id + flow_slug + event_type</td></tr>
+          <tr><td><code>password_policies</code></td><td>Fila única (singleton) — espejo editable de la única política de contraseña real que existe en Authentik</td><td class="p">fila fija, sin FK a tenant</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div class="callout safe">
+        <span class="label">Para replicar este patrón en otro sistema (no Authentik)</span>
+        <ol class="clean" style="margin-top:0.4rem;">
+          <li>Resolver "quién es el tenant" de forma explícita y confiable — nunca fiarse de un header tal cual; validar que venga realmente del proxy de confianza (ver <code>_is_trusted_proxy_peer</code>, que verifica la IP del contenedor gateway en cada request).</li>
+          <li>Preferir la API del sistema objetivo sobre SQL directo. Si no hay API para algo puntual, limitar el SQL directo a <strong>lecturas</strong> de datos estables (nombres, slugs) — una escritura SQL directa a la base de otro sistema es el tipo de atajo que un día rompe sin aviso.</li>
+          <li>Si hay que reaccionar a eventos del sistema objetivo, usar su mecanismo de webhooks con secreto compartido validado server-side con comparación segura (<code>compare_digest</code>), nunca solo por IP de origen.</li>
+          <li>Diseñar cada push hacia el sistema objetivo para que falle "suave": guardar el cambio localmente igual y reportar el error aparte, en vez de perder el trabajo del usuario porque el otro sistema estaba caído.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="dos-motores">
+      <h2><span class="num">04</span> Los dos motores de marca</h2>
+      <p class="lead">Esto es lo que más confunde y la causa más común de "lo arreglé pero en otra pantalla sigue roto": Authentik no tiene una sola forma de pintar sus páginas, tiene dos, y son independientes.</p>
+      <table class="ref">
+        <thead><tr><th>Motor</th><th>Dónde pinta</th><th>Archivo fuente</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Flow executor</strong> (SPA)</td>
+            <td>Login, cambio de contraseña, MFA — pantallas de dos paneles con logo</td>
+            <td class="p">core-casmarts/data/authentik/custom-templates/if/flow.html</td>
+          </tr>
+          <tr>
+            <td><strong>Gateway JS</strong> (SSR)</td>
+            <td>Páginas renderizadas por Authentik directo — ej. "Permiso denegado"</td>
+            <td class="p">core-casmarts/gateway/static/custom_authentik.js</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>El gateway (nginx) inyecta ese segundo script en el <code>&lt;head&gt;</code> de <em>cada</em> página de Authentik vía <code>sub_filter</code>. Un arreglo visual que solo toca <code>flow.html</code> nunca llega a la pantalla de "Permiso denegado", porque esa pantalla no usa <code>flow.html</code> — la pinta el gateway.</p>
+      <div class="callout warn">
+        <span class="label">Antes de dar por cerrado un cambio</span>
+        <p>Si el cambio es de layout/branding general, probar <strong>ambas</strong> rutas: una pantalla normal de login y una de error/acceso denegado. Y si se edita <code>custom_authentik.js</code>, subir el número de versión en <code>?v=</code> dentro de <span class="path">gateway/sites-enabled/subdomains.conf</span> — si no, el navegador sigue usando la copia vieja en caché.</p>
+      </div>
+    </section>
+
+    <section id="donde-vive">
+      <h2><span class="num">05</span> Dónde vive cada archivo</h2>
+      <p class="lead">Mapa rápido para no perderse entre carpetas cuando hay que tocar algo.</p>
+      <div class="table-wrap">
+      <table class="ref">
+        <thead><tr><th>Qué</th><th>Ruta</th><th>¿Se toca desde el panel?</th></tr></thead>
+        <tbody>
+          <tr><td>Colores, logos, textos, tipografías</td><td class="p">PostgreSQL · tabla tenant_themes</td><td><span class="badge safe">sí, 100%</span></td></tr>
+          <tr><td>Layout, responsividad, animaciones, comportamiento del formulario</td><td class="p">.../if/flow.html</td><td><span class="badge warn">no, solo código</span></td></tr>
+          <tr><td>Branding en páginas de error/SSR (ej. acceso denegado)</td><td class="p">gateway/static/custom_authentik.js</td><td><span class="badge warn">no, solo código</span></td></tr>
+          <tr><td>Plantilla histórica usada por el endpoint de "deploy" legado</td><td class="p">backend/app/templates/login.html.j2</td><td><span class="badge warn">mantener sincronizada, no editar sola</span></td></tr>
+          <tr><td>API pública que consulta la pantalla de login</td><td class="p">backend/app/routers/public.py</td><td><span class="badge warn">no</span></td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="callout">
+        <span class="label">Nota sobre login.html.j2</span>
+        <p>Hace tiempo existía un flujo donde "Guardar y Aplicar" generaba un <code>login.html</code> estático a partir de esta plantilla. Ya no es así: <code>flow.html</code> ahora pide el tema en vivo (ver diagrama arriba) y no necesita que nadie "publique" nada. <code>login.html.j2</code> se mantiene como copia de respaldo del mismo HTML/CSS/JS por si algún día se reactiva ese camino — debe quedar idéntica a <code>flow.html</code>, nunca se edita por separado.</p>
+      </div>
+    </section>
+
+    <section id="responsividad">
+      <h2><span class="num">06</span> La capa de responsividad</h2>
+      <p class="lead">Todo esto vive en un único archivo: <span class="path">.../if/flow.html</span>. No hay un breakpoint "mágico" de frameworks como Tailwind o Bootstrap — son reglas escritas a mano para esta pantalla de dos paneles.</p>
+
+      <h3>Los puntos de quiebre reales</h3>
+      <pre><code>@media (max-width: 920px) { /* columna de logos se apila sobre el formulario */ }
+@media (max-width: 480px) { /* ajustes finos de espaciado para celular */ }</code></pre>
+      <p>Ojo: deliberadamente <strong>no</strong> se usa 480–768px como "la" frontera móvil típica de muchos frameworks. Se probó y rompía laptops normales: una laptop de 1366px de ancho con el escalado de Windows en 200% reporta un viewport efectivo de ~683px — entra en la regla "móvil" sin ser un teléfono, y la columna de logos desaparecía en escritorio. Por eso el límite bajo quedó en 480px.</p>
+
+      <h3>El contenedor</h3>
+      <p>El layout de dos paneles es <code>#cs-screen</code> (variantes <code>.cs-left / .cs-right / .cs-center</code> según dónde va la columna de logos) con <code>#cs-logos-col</code> como la columna que se oculta o apila en pantallas angostas. La tarjeta de login tiene <code>min-height: 560px</code>.</p>
+
+      <div class="callout warn">
+        <span class="label">La red de seguridad del scroll</span>
+        <p><code>body</code> usa <code>overflow: auto</code> (no <code>hidden</code>) a propósito. Si la altura visible real es menor que esos 560px — barra del navegador + taskbar de Windows de por medio — sin esto el botón de "Iniciar sesión" queda inalcanzable, sin forma de hacer scroll para llegar a él. No quitar ese <code>auto</code> aunque "se vea mejor" sin scrollbar.</p>
+      </div>
+    </section>
+
+    <section id="reglas">
+      <h2><span class="num">07</span> Reglas antes de tocar el CSS</h2>
+      <p class="lead">Esto no es teoría — son las causas reales de los últimos incidentes en esta pantalla. Cuatro reglas que evitan repetirlos:</p>
+      <ol class="clean">
+        <li><strong>Nunca ocultar <code>&lt;p&gt;</code> "genéricos" para limpiar texto redundante.</strong> Una regla tipo <code>p:not(.alguna-clase){display:none}</code> se come también el mensaje de error real de "contraseña incorrecta" — porque ese mensaje también es un <code>&lt;p&gt;</code>. Siempre excluir explícitamente clases de error/alerta.</li>
+        <li><strong>No hacer listas fijas de qué pantallas reciben el estilo.</strong> Enumerar <code>ak-stage-identification, ak-stage-password…</code> garantiza que la siguiente pantalla nueva (ej. "acceso denegado") quede sin marca. Mejor: cualquier etiqueta que empiece con <code>ak-</code>.</li>
+        <li><strong>Probar siempre un login que falla</strong> (contraseña incorrecta), no solo el camino feliz. Es la única forma de ver si el mensaje de error sigue siendo visible después de un cambio.</li>
+        <li><strong>Probar a 1366×768 con zoom/escalado al 150–200%.</strong> Es la forma más común en que una laptop normal termina "pareciendo" un celular para el CSS.</li>
+      </ol>
+      <div class="callout warn">
+        <span class="label">Si algo queda oculto y el CSS no lo trae de vuelta</span>
+        <p>Buscar JavaScript que esté poniendo <code>style.display = 'none'</code> con <code>!important</code> directo en el elemento. Un <code>!important</code> puesto por JS en línea le gana a cualquier hoja de estilos — no importa cuántas reglas CSS se agreguen encima, no va a funcionar hasta encontrar y quitar ese JS.</p>
+      </div>
+    </section>
+
+    <section id="flujo">
+      <h2><span class="num">08</span> Cómo hacer un cambio sin romper nada</h2>
+      <ul class="clean">
+        <li><span class="badge safe">Marca / cosmético</span> — logo, color, texto, tipografía, aviso de privacidad → se hace completo desde el panel <span class="path">loginmanager.casmart.internal</span>, botón "Guardar y Aplicar". No requiere a nadie de código.</li>
+        <li><span class="badge warn">Layout / responsividad / comportamiento</span> → se edita <span class="path">.../if/flow.html</span> directo (es un bind-mount, Authentik lo sirve fresco en cada request, no hay caché de por medio que limpiar). Después: copiar el mismo cambio a <span class="path">login.html.j2</span> para que ambos queden idénticos, y si el cambio también debe verse en pantallas de error, replicarlo en <span class="path">custom_authentik.js</span> + subir su <code>?v=</code> + <code>nginx -s reload</code>.</li>
+      </ul>
+      <p>Para confirmar que un cambio en <code>flow.html</code> ya está "live" sin pasar por el navegador:</p>
+      <pre><code>curl -sk https://auth.casmart.internal/if/flow/default-authentication-flow/ | grep "tu-cambio"</code></pre>
+    </section>
+
+    <section id="referencia">
+      <h2><span class="num">09</span> Referencia rápida</h2>
+      <div class="table-wrap">
+      <table class="ref">
+        <thead><tr><th>Contenedor</th><th>Rol</th><th>Puerto expuesto</th></tr></thead>
+        <tbody>
+          <tr><td>casmarts-login-frontend</td><td>Panel admin (React)</td><td>3080 → 3000</td></tr>
+          <tr><td>casmarts-login-backend</td><td>API FastAPI</td><td>interno (detrás del gateway)</td></tr>
+          <tr><td>casmarts-core-pgpool</td><td>PostgreSQL (tema persistido)</td><td>interno</td></tr>
+          <tr><td>casmarts-core-cache</td><td>Valkey (caché de tema)</td><td>interno</td></tr>
+          <tr><td>casmarts-core-gateway</td><td>nginx — inyecta custom_authentik.js</td><td>443</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p style="margin-top:1.5rem; color:var(--text-muted); font-size:0.9rem;">Repo: <span class="path">authentik-login-manager/</span> dentro de <span class="path">/opt/ecosistema-casmarts/</span>. Volumen compartido con Authentik: <span class="path">core-casmarts/data/authentik/custom-templates</span>.</p>
+    </section>
+
+  </main>
+
+  <footer class="colophon">
+    Documento vivo — si algo de esto cambia de arquitectura otra vez, este documento debe actualizarse junto con el código, no después.
+  </footer>
+
+</div>
+
+</body>
+</html>

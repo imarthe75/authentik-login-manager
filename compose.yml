@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: casmarts-login-backend
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://admin:casmarts_secure_db_pwd_2026@casmarts-core-pgpool:5432/authentik_login_manager}
+      DATABASE_URL: ${DATABASE_URL}
       VALKEY_URL: ${VALKEY_URL:-redis://casmarts-core-cache:6379/0}
       ADMIN_API_KEY: ${ADMIN_API_KEY}
       SESSION_SECRET: ${SESSION_SECRET}
