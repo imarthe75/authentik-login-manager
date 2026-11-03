@@ -272,7 +272,7 @@ Diccionario `TRANSLATIONS` aplicado por `translateNode()` a nodos de texto y `pl
 - [x] 1366×768 con escalado 150–200 %: botón de iniciar sesión alcanzable. _(equivalente al viewport 683×768 ya probado — el escalado del SO solo cambia el innerWidth CSS reportado)_
 - [x] SO en modo oscuro: textos informativos legibles. _(Playwright `colorScheme:'dark'`, inputs oscuros confirmados visualmente)_
 - [x] `login.html.j2` actualizado (si no, el próximo deploy revierte `flow.html`); `?v=` del
-      gateway incrementado y `nginx -s reload`. _(los 3 `flow.html`-gemelos en sync; `?v=20261030_v17`)_
+      gateway incrementado y `nginx -s reload`. _(los 3 `flow.html`-gemelos en sync; `?v=20261103_v18`)_
 
 ## Referencias en esta instancia
 - `.agent/ARCHITECTURE_CSS_RULES.md`, `.agent/ARCHITECTURE_BRANDING.md`
@@ -450,3 +450,19 @@ confirmado al final: `User.objects.filter(username__startswith='qa_').count()` �
   tarjetas y campos son oscuros en modo oscuro por diseño (a diferencia de Kardex,
   que los mantiene claros siempre), así que un recuadro claro desentonaría sin
   resolver ningún problema real.
+
+---
+
+## Addendum 2026-11-03 — colisión de motores en Shadow DOM (`?v=20261103_v18`)
+
+**Problema reportado (Centinela AI):** en temas con `panel_bg_color` / `card_bg_color` oscuro, el botón del ojo de mostrar contraseña dentro de `flow.html` (`#cs-screen`) terminaba con fondo oscuro e ícono negro encima (invisible), a pesar de que `flow.html` lo declara con fondo blanco.
+
+**Causa raíz:** `custom_authentik.js` (inyectado globalmente por nginx vía `sub_filter` en todas las páginas) también ejecutaba `applyDynamicStyles()`, `injectStyle(shadow)` y `buildLayout(shadow)` dentro del shadow root de `ak-flow-executor` aun cuando la página era `flow.html` (`#cs-screen` presente). Como `custom_authentik.js` inyectaba su `<style id="casmarts-dynamic-style">` **después** de `<style id="cs-theme">` de `flow.html`, sus reglas con `!important` (ej. `.pf-c-input-group > button { background: ${cardBg} !important; }`) ganaban la cascada sobre las de `flow.html`.
+
+**Solución aplicada en `core-casmarts/gateway/static/custom_authentik.js` (copia versionada en `docs/gateway-static/`):**
+1. En `applyDynamicStyles()`: salida temprana si existe `#cs-screen`:
+   ```js
+   if (document.getElementById('cs-screen') !== null) return;
+   ```
+2. En `tick()`: no ejecutar `injectStyle(shadow)`, `buildLayout(shadow)` ni `applyDynamicStyles()` cuando `isCustomFlowTemplate` (`document.getElementById('cs-screen') !== null`) es verdadero.
+3. Bump de versión a `CSS_VERSION = '20261103_v18'` en `custom_authentik.js` y `?v=20261103_v18` en los 4 bloques `sub_filter` de `core-casmarts/gateway/sites-enabled/subdomains.conf` + `nginx -s reload`.

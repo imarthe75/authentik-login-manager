@@ -1,0 +1,471 @@
+/*
+ * CASmartS — Login Page · CÍVIKA Design System
+ * Split-screen: card centrada en mitad izquierda · Logo corporativo
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Jost:wght@300;400;500;600;700;800&display=swap');
+
+/* ─── Variables ──────────────────────────────────────────── */
+:host, :root {
+    --pf-c-login--Background: #edf4fc !important;
+    --pf-c-button--m-primary--BackgroundColor: #4272A5 !important;
+    --pf-c-button--m-primary--hover--BackgroundColor: #2d5580 !important;
+    --pf-c-form-control--focus--BorderBottomColor: #4272A5 !important;
+    --pf-global--primary-color--100: #4272A5 !important;
+    --pf-global--primary-color--200: #2d5580 !important;
+    --pf-global--link--Color: #4272A5 !important;
+    --pf-global--link--hover--Color: #2d5580 !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* ─── Contenedor principal — imagen de fondo cubre toda la pantalla ── */
+.pf-c-login {
+    background-image: url('/static/background_casmarts.png') !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    overflow: hidden !important;
+}
+
+/* ─── Mobile: tarjeta centrada con fondo desenfocado ─────── */
+.pf-c-login::before {
+    content: '' !important;
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(248, 250, 253, 0.55) !important;
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
+    z-index: 1 !important;
+}
+
+/* ─── Desktop (≥ 860px): panel izquierdo esmerilado ───────
+   Antes 768px: con el card centrado por `left:25%/75%` + `translate(-50%)`
+   y 420px de ancho fijo, un viewport de 768px (iPad en vertical, el caso
+   real más común) deja el centro del panel a solo 192px del borde — 18px
+   MENOS que la mitad del card (210px) — y el borde izquierdo queda
+   recortado por el `overflow:hidden` del contenedor. El punto seguro es
+   0.25·VW ≥ 210px → VW ≥ 840px; 860px deja margen. Mismo criterio que el
+   breakpoint de 920px de flow.html (ver memoria flowhtml-css-recurring-
+   regressions: no asumir que "tablet" empieza en 768px). */
+@media (min-width: 860px) {
+    .pf-c-login {
+        justify-content: flex-start !important;
+        align-items: flex-start !important;
+    }
+
+    /* Panel izquierdo: 50% del viewport, fondo esmerilado */
+    .pf-c-login::before {
+        inset: 0 auto 0 0 !important;
+        width: 50% !important;
+        height: 100% !important;
+        background: rgba(248, 250, 253, 0.88) !important;
+        backdrop-filter: blur(28px) !important;
+        -webkit-backdrop-filter: blur(28px) !important;
+    }
+
+    /* Tarjeta: centrada dentro del panel izquierdo */
+    .pf-c-login__main {
+        position: fixed !important;
+        left: 25% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        margin: 0 !important;
+    }
+}
+
+/* ─── Tarjeta (glassmorphism ligero) ───────────────────────
+   position:relative + el `.pf-c-login{display:flex;justify-content:center;
+   align-items:center}` de arriba deberia centrarla sola, pero Authentik
+   define `.pf-c-login` nativamente como CSS GRID (grid-template-rows:
+   header/main/footer) — nuestro `display:flex!important` gana la guerra de
+   especificidad, pero `.pf-c-login__main` conserva un `align-self:start`
+   nativo (pensado para su contexto de grid original) que un simple
+   `align-items:center` del padre NO puede pisar (align-self en el hijo
+   siempre gana sobre align-items del padre), y el centrado vertical
+   tampoco aplicaba por el mismo choque grid/flex. Confirmado con Playwright
+   en cualquier ancho <860px (no es un caso raro: CUALQUIER telefono/tablet
+   sin el layout de 2 paneles lo sufria — la tarjeta quedaba pegada arriba,
+   con un hueco vacio abajo). Arreglo robusto: centrar con position:absolute
+   + transform, igual que #cs-screen en flow.html — no depende de que el
+   padre sea flex o grid. */
+.pf-c-login__main {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    margin: 0 !important;
+    z-index: 10 !important;
+    background: rgba(255, 255, 255, 0.72) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.7) !important;
+    border-radius: 20px !important;
+    box-shadow:
+        0 2px 0 rgba(255,255,255,0.9) inset,
+        0 24px 48px rgba(0, 42, 76, 0.10),
+        0 4px 12px rgba(0, 42, 76, 0.06) !important;
+    width: 420px !important;
+    max-width: 88vw !important;
+    overflow: hidden !important;
+    color: #002A4C !important;
+}
+
+/* ─── Ocultar logo nativo de Authentik dentro del card ───── */
+.pf-c-login__main-header .pf-c-brand,
+.pf-c-login__main-header > img,
+.pf-c-login__header,
+.ak-brand,
+.ak-brand img,
+.pf-c-login__main-body > p,
+.pf-c-login__main-body-subtext,
+[slot="description"] {
+    display: none !important;
+}
+
+/* ─── Logo corporativo inyectado (id=casmarts-logo-branding) */
+#casmarts-logo-branding {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    padding: 2rem 2rem 0.5rem !important;
+    gap: 0.5rem !important;
+}
+
+#casmarts-logo-branding .cs-logo-img {
+    max-width: 192px !important;
+    max-height: 70px !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
+    display: block !important;
+    mix-blend-mode: multiply !important;
+}
+
+#casmarts-logo-branding .cs-tagline {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.78rem !important;
+    font-weight: 500 !important;
+    color: #4a6b82 !important;
+    letter-spacing: 0.06em !important;
+    text-transform: uppercase !important;
+    margin: 0 !important;
+}
+
+/* ─── Header del card ────────────────────────────────────── */
+.pf-c-login__main-header {
+    background: transparent !important;
+    padding: 1.25rem 2rem 1rem 2rem !important;
+    text-align: center !important;
+}
+
+.pf-c-title, .pf-c-login__main-header h1, h1 {
+    font-family: 'Jost', 'Inter', sans-serif !important;
+    font-weight: 800 !important;
+    color: #002A4C !important;
+    font-size: 1.6rem !important;
+    letter-spacing: -0.02em !important;
+}
+
+.pf-c-login__main-header p,
+.pf-c-login__main-header-desc {
+    font-family: 'Inter', sans-serif !important;
+    color: #4a6b82 !important;
+    font-size: 0.9rem !important;
+    margin-top: 0.35rem !important;
+}
+
+/* ─── Inputs ─────────────────────────────────────────────── */
+.pf-c-form-control,
+input[type="text"],
+input[type="password"],
+input[type="email"] {
+    font-family: 'Inter', sans-serif !important;
+    background-color: rgba(255, 255, 255, 0.7) !important;
+    border: 1.5px solid rgba(0, 42, 76, 0.14) !important;
+    border-radius: 8px !important;
+    color: #002A4C !important;
+    padding: 0.72rem 1rem !important;
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.pf-c-form-control:focus,
+input:focus {
+    background-color: rgba(255, 255, 255, 0.92) !important;
+    border-color: #4272A5 !important;
+    box-shadow: 0 0 0 3px rgba(66, 114, 165, 0.18) !important;
+    outline: none !important;
+}
+
+/* ── Corrección de diseño e integración del Ojo de Contraseña (input-group) ──
+   input/botón tratados como una sola pieza: el input pierde su borde derecho,
+   el botón su radio izquierdo, y el único borde visible entre ambos es el
+   divisor de 1px del botón. :focus-within sincroniza el color de foco en
+   AMBOS (antes solo el input lo recibía, por eso el halo de foco se cortaba
+   justo en la unión con el botón del ojo — mismo arreglo que en flow.html). */
+.pf-c-input-group {
+    display: flex !important;
+    width: 100% !important;
+    align-items: stretch !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+}
+.pf-c-input-group > .pf-c-form-control,
+.pf-c-input-group > input {
+    flex: 1 1 auto !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-right: none !important;
+}
+.pf-c-input-group > .pf-c-button,
+.pf-c-input-group > button {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-top-right-radius: 8px !important;
+    border-bottom-right-radius: 8px !important;
+    border: 1.5px solid rgba(0, 42, 76, 0.14) !important;
+    border-left: 1px solid rgba(0, 42, 76, 0.14) !important;
+    background: rgba(255, 255, 255, 0.7) !important;
+    padding: 0 0.85rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+.pf-c-input-group > .pf-c-button::after,
+.pf-c-input-group > button::after {
+    display: none !important;
+    content: none !important;
+    border: none !important;
+}
+.pf-c-input-group:focus-within > .pf-c-form-control,
+.pf-c-input-group:focus-within > input,
+.pf-c-input-group:focus-within > .pf-c-button,
+.pf-c-input-group:focus-within > button {
+    border-color: #4272A5 !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+.pf-c-input-group > :only-child {
+    border-radius: 8px !important;
+    border-right: 1.5px solid rgba(0, 42, 76, 0.14) !important;
+}
+
+.pf-c-form-control::placeholder {
+    color: rgba(0, 42, 76, 0.38) !important;
+}
+
+/* Autofill de Chrome/Edge tapa el fondo con un inset shadow del color que
+   decide el navegador (amarillo/azul) — lo forzamos a juego con el input
+   real. Variante oscura en el bloque DARK MODE más abajo. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.92) inset !important;
+    box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.92) inset !important;
+    -webkit-text-fill-color: #002A4C !important;
+    caret-color: #002A4C !important;
+    transition: background-color 50000s ease-in-out 0s !important;
+}
+
+/* ─── Botones ────────────────────────────────────────────── */
+.pf-c-button.pf-m-primary,
+button[type="submit"],
+.ak-btn-primary {
+    font-family: 'Jost', 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    background: linear-gradient(135deg, #4272A5 0%, #2d5580 100%) !important;
+    border: none !important;
+    border-radius: 8px !important;
+    color: #ffffff !important;
+    padding: 0.75rem 1.5rem !important;
+    box-shadow: 0 4px 12px rgba(66, 114, 165, 0.22) !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+    width: 100% !important;
+}
+
+.pf-c-button.pf-m-primary:hover,
+button[type="submit"]:hover {
+    background: linear-gradient(135deg, #2d5580 0%, #1e3d5e 100%) !important;
+    box-shadow: 0 6px 18px rgba(66, 114, 165, 0.30) !important;
+    transform: translateY(-1px) !important;
+}
+
+.pf-c-button.pf-m-primary:active,
+button[type="submit"]:active {
+    transform: translateY(1px) !important;
+    box-shadow: 0 2px 6px rgba(66, 114, 165, 0.18) !important;
+}
+
+/* ─── Labels y texto de formulario ──────────────────────── */
+.pf-c-form__label, label {
+    font-family: 'Inter', sans-serif !important;
+    color: #002A4C !important;
+    font-weight: 600 !important;
+    font-size: 0.88rem !important;
+}
+
+.pf-c-form__helper-text {
+    font-family: 'Inter', sans-serif !important;
+    color: #4a6b82 !important;
+}
+
+/* ─── Links ──────────────────────────────────────────────── */
+a, .pf-c-login__main-footer-band-item a {
+    color: #4272A5 !important;
+    text-decoration: none !important;
+    font-weight: 600 !important;
+    transition: color 0.18s ease !important;
+}
+
+a:hover {
+    color: #2d5580 !important;
+    text-decoration: underline !important;
+}
+
+/* ─── Footer del card ────────────────────────────────────── */
+.pf-c-login__main-footer {
+    background: transparent !important;
+    padding: 1rem 2rem 2rem 2rem !important;
+}
+
+/* ─── Ocultar header exterior de Authentik ───────────────── */
+.pf-c-login__header {
+    display: none !important;
+}
+
+/* ─── Ocultar footer nativo ("Powered by authentik") ─────────
+   flow.html ya lo oculta para login/password/MFA/etc; este archivo solo se
+   inyecta en paginas SIN #cs-screen (ver isCustomFlowTemplate en
+   custom_authentik.js) — la mas importante es "Permiso denegado"
+   (/application/o/authorize/), que hasta ahora dejaba ese texto suelto,
+   sin estilo, flotando en el panel derecho (hallado via Playwright). */
+.pf-c-login__footer {
+    display: none !important;
+}
+
+/* ═════════════════════════════════════════════════════════════
+   DARK MODE SUPPORT (2026-07-09)
+   ════════════════════════════════════════════════════════════ */
+@media (prefers-color-scheme: dark) {
+    :host, :root {
+        --pf-c-login--Background: #0a0e27 !important;
+        --pf-c-button--m-primary--BackgroundColor: #5a8fd9 !important;
+        --pf-c-button--m-primary--hover--BackgroundColor: #4272A5 !important;
+        --pf-c-form-control--focus--BorderBottomColor: #7aafff !important;
+        --pf-global--primary-color--100: #7aafff !important;
+        --pf-global--primary-color--200: #5a8fd9 !important;
+        --pf-global--link--Color: #7aafff !important;
+        --pf-global--link--hover--Color: #9ac5ff !important;
+    }
+
+    /* Fondo con overlay más oscuro */
+    .pf-c-login::before {
+        background: rgba(15, 23, 42, 0.7) !important;
+        backdrop-filter: blur(6px) !important;
+    }
+
+    @media (min-width: 860px) {
+        .pf-c-login::before {
+            background: rgba(15, 23, 42, 0.92) !important;
+            backdrop-filter: blur(28px) !important;
+        }
+    }
+
+    /* Tarjeta: fondo oscuro con bordes claros */
+    .pf-c-login__main {
+        background: rgba(20, 30, 48, 0.85) !important;
+        border-color: rgba(255, 255, 255, 0.15) !important;
+        color: #e8f0fa !important;
+    }
+
+    /* Logo tagline */
+    #casmarts-logo-branding .cs-tagline {
+        color: #a0b5cc !important;
+    }
+
+    /* Títulos */
+    .pf-c-title, .pf-c-login__main-header h1, h1 {
+        color: #e8f0fa !important;
+    }
+
+    /* Subtítulos y helper text */
+    .pf-c-login__main-header p,
+    .pf-c-login__main-header-desc {
+        color: #a0b5cc !important;
+    }
+
+    .pf-c-form__helper-text {
+        color: #a0b5cc !important;
+    }
+
+    /* Inputs en modo oscuro */
+    .pf-c-form-control,
+    input[type="text"],
+    input[type="password"],
+    input[type="email"] {
+        background-color: rgba(35, 50, 75, 0.6) !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        color: #e8f0fa !important;
+    }
+
+    .pf-c-form-control:focus,
+    input:focus {
+        background-color: rgba(40, 60, 90, 0.8) !important;
+        border-color: #7aafff !important;
+        box-shadow: 0 0 0 3px rgba(122, 175, 255, 0.18) !important;
+    }
+
+    .pf-c-form-control::placeholder {
+        color: rgba(168, 189, 210, 0.5) !important;
+    }
+
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus,
+    input:-webkit-autofill:active {
+        -webkit-box-shadow: 0 0 0 1000px rgba(35, 50, 75, 0.95) inset !important;
+        box-shadow: 0 0 0 1000px rgba(35, 50, 75, 0.95) inset !important;
+        -webkit-text-fill-color: #e8f0fa !important;
+        caret-color: #e8f0fa !important;
+    }
+
+    /* Botón "mostrar contraseña" en input-group */
+    .pf-c-input-group > .pf-c-button,
+    .pf-c-input-group > button {
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        background: rgba(35, 50, 75, 0.6) !important;
+    }
+    .pf-c-input-group:focus-within > .pf-c-form-control,
+    .pf-c-input-group:focus-within > input,
+    .pf-c-input-group:focus-within > .pf-c-button,
+    .pf-c-input-group:focus-within > button {
+        border-color: #7aafff !important;
+    }
+
+    /* Labels */
+    .pf-c-form__label, label {
+        color: #e8f0fa !important;
+    }
+
+    /* Links */
+    a, .pf-c-login__main-footer-band-item a {
+        color: #7aafff !important;
+    }
+
+    a:hover {
+        color: #9ac5ff !important;
+    }
+}
