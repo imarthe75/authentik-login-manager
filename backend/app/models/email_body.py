@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import String, Text, CheckConstraint, UniqueConstraint, ForeignKey
+from sqlalchemy import String, Text, CheckConstraint, UniqueConstraint, ForeignKey, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
@@ -26,8 +26,11 @@ class TenantEmailBody(Base):
         ),
     )
 
+    # server_default (no default= de Python): postgres/rules.md #2 exige
+    # uuidv7, no uuid4; necesario para que SQLAlchemy pida el valor generado
+    # de vuelta via RETURNING (ver tenant_application.py, mismo patron).
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

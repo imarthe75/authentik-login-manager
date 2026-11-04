@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Float, Integer, Boolean, DateTime, Text, func, JSON, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import String, Float, Integer, Boolean, DateTime, Text, func, ForeignKey, text
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -16,8 +16,11 @@ class TenantTheme(Base):
     __tablename__ = "tenant_themes"
 
     # Identificadores y Relaciones
+    # server_default (no default= de Python): postgres/rules.md #2 exige
+    # uuidv7, no uuid4; necesario para que SQLAlchemy pida el valor generado
+    # de vuelta via RETURNING (ver tenant_application.py, mismo patron).
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -222,10 +225,10 @@ class TenantTheme(Base):
         String(20), server_default='integrated', nullable=False
     )
     custom_messages: Mapped[dict | None] = mapped_column(
-        JSON, nullable=True, server_default='{}'
+        JSONB, nullable=True, server_default='{}'
     )
     expansion_config: Mapped[dict | None] = mapped_column(
-        JSON, nullable=True, server_default='{}'
+        JSONB, nullable=True, server_default='{}'
     )
 
     # Auditoría y Tiempos de Registro

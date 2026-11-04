@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Integer, Boolean, DateTime, Text, func
+from sqlalchemy import String, Integer, Boolean, DateTime, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
@@ -15,8 +15,11 @@ SINGLETON_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 class PasswordPolicy(Base):
     __tablename__ = "password_policies"
 
+    # server_default (no default= de Python): postgres/rules.md #2 exige
+    # uuidv7, no uuid4; necesario para que SQLAlchemy pida el valor generado
+    # de vuelta via RETURNING (ver tenant_application.py, mismo patron).
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     length_min: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     amount_uppercase: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
