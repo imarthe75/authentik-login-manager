@@ -61,11 +61,12 @@ lo que vive en 10.4.3.208, que es la base de identidad del resto.
           └─────────┬──────────┘ └────────┬──────────┘  └──────────┬───────────┘
                      │                    │                         │
                      │     ┌──────────────┴───────────┐             │
-                     │     │   volumen compartido       │             │
-                     │     │ custom-templates/login.html│◄────────────┘
-                     │     │ (login.html.j2 renderizado) │  (vía su propio
-                     └────►│ Authentik lo sirve como su  │   mecanismo, ver
-                            │ plantilla de login real     │   nota flow.html abajo)
+                     │     │   volumen compartido       │◄────────────┘
+                     │     │ custom-templates/if/        │   AMBOS /deploy escriben
+                     └────►│ flow.html — Authentik lo    │   el MISMO archivo —
+                            │ sirve como SPA executor.    │   ver §1.3, es colisión
+                            │ JS interno hace fetch en    │   real, no aislamiento
+                            │ vivo a /lm/api/.../theme/…   │
                             └─────────────────────────────┘
                      │                    │                         │
                      ▼                    ▼                         ▼
@@ -105,23 +106,87 @@ Todo esto vive en `core-casmarts/docker-compose.yml` (servicios: `gateway`, `db-
 > descrita arriba — es infraestructura aparte para agentes de IA, no algo que `login-manager` o
 > `login-designer` consuman. No lo confundas con `db-primary`/`cache` de arriba, son bases distintas.
 
-### 1.3 Dos (o tres) motores de branding distintos — no los confundas
+### 1.3 Dos motores de branding — comparten un archivo, y eso YA causó bugs reales
 
-Esto ya causó bugs reales porque parecen la misma cosa y no lo son:
+> Verificado contra el código y los archivos reales en disco — ver también
+> `docs/LOGIN_MANAGER_GUIA_TECNICA.html` y el addendum 2026-11-03 de
+> `docs/REPORTE_MEJORAS_UI_AUTHENTIK.md` para más detalle.
 
-1. **`login.html.j2` → `login.html`** (motor de `authentik-login-manager`): Jinja2 renderiza el tema
-   completo del lado del servidor y escribe un HTML **estático** al volumen compartido
-   `custom-templates`. Authentik lo sirve tal cual para la página de login real de cada flow/tenant.
-   Cero JavaScript de tema en el cliente — todo ya viene resuelto en el HTML.
-2. **`flow.html`** (motor de `authentik-login-designer`, generado desde su propio `login.html.j2`
-   vía un "deploy" del Designer): usado por los flows SPA de Authentik. Tiene su propia lógica
-   runtime (fetch del tema al backend de Designer en caliente).
-3. **`custom_authentik.js`** (en el `gateway`, nginx): un TERCER mecanismo, para páginas que ni
-   Manager ni Designer tocan — páginas de error SSR de Authentik mismo (ej. access-denied). Vive en
-   el gateway, no en ningún backend de login.
+**El mecanismo real:**
 
-Si vas a tocar branding/CSS de login, identifica primero CUÁL de los tres estás editando — son
-archivos y pipelines independientes, un fix en uno no se refleja en los otros.
+1. **`flow.html`** — un único archivo físico, compartido:
+   `core-casmarts/data/authentik/custom-templates/if/flow.html`. Authentik lo sirve para TODOS los
+   flows tipo SPA (login, cambio de contraseña, MFA). No es estático de verdad: tiene JS con
+   `API_BASE = '/lm'` hardcodeado que hace `fetch()` en vivo a
+   `/api/v1/public/theme/{flow_slug}?app={client_id}` (vía el gateway, prefijo `/lm/`) en cada
+   carga de página, con Valkey de caché del lado del backend. Guardar un tema en el panel admin
+   **no** regenera ningún archivo — el cambio se ve en el siguiente request porque se lee fresco
+   (o se invalida la caché de Valkey al guardar).
+2. **El endpoint `POST /{flow_slug}/deploy`** (existe en **ambos** backends — `admin.py` de Manager
+   Y de Designer, cada uno con su propio `_build_universal_template()` / `login.html.j2`) escribe
+   una versión server-renderizada de ese mismo contenido al **mismo path físico**
+   (`/shared/authentik/templates/if/flow.html`, el mismo volumen montado en los dos contenedores).
+   **Esto es una colisión real, no un aislamiento**: si alguien le da "Guardar y Aplicar" desde
+   Designer después de que Manager desplegó el suyo, pisa la versión de Manager (y viceversa). Al
+   momento de escribir esto, ambas copias de `login.html.j2` (Manager y Designer) tienen el mismo
+   `API_BASE = '/lm'` hardcodeado — es decir, incluso lo que Designer despliega sigue llamando a la
+   API de **Manager**, nunca a la propia. Si vas a tocar el flujo de `/deploy` de cualquiera de los
+   dos, ten esto en cuenta antes de asumir que son independientes.
+3. **`custom_authentik.js`** (en el `gateway`, nginx, inyectado vía `sub_filter` en **todas** las
+   páginas de Authentik, no solo las de error): pensado originalmente para páginas SSR que ni
+   Manager ni Designer tocan (ej. "Permiso denegado"), pero al inyectarse globalmente también corre
+   dentro del shadow DOM de `flow.html` — y eso causó una colisión real el 2026-11-03 (botón de
+   mostrar/ocultar contraseña con fondo e ícono invisibles: las reglas `!important` de
+   `custom_authentik.js` ganaban la cascada sobre las de `flow.html`). Ya está parchado con un guard
+   explícito (`if (document.getElementById('cs-screen')) return;` en `applyDynamicStyles()`/`tick()`)
+   pero es una señal de que estos "motores" **no están tan aislados como parecen** — cualquier
+   cambio a `custom_authentik.js` debe probarse también dentro de una pantalla `flow.html`, no solo
+   en una página de error.
+4. **`login.html.j2`** (en cada backend) es la plantilla Jinja2 que alimenta el `/deploy` de cada
+   backend (punto 2) — no es un cuarto motor independiente, es la fuente de los dos `/deploy`.
+
+**Antes de dar por cerrado un cambio de branding/CSS**: prueba una pantalla normal de login
+(`flow.html`), una de error (ej. acceso denegado, `custom_authentik.js`), y — si vas a usar el botón
+"Guardar y Aplicar" de Manager o Designer — confirma con quién editó el tema por última vez antes de
+desplegar, para no pisar un cambio reciente del otro panel.
+
+### 1.3.1 Los tres caminos por los que Login Manager toca a Authentik (y sus niveles de riesgo)
+
+Esto importa si vas a tocar cualquier integración con Authentik, o a replicar este patrón para otro
+sistema. Login Manager no es "un panel que guarda cosas en su base y ya" — toca a Authentik por tres
+caminos independientes, con riesgo muy distinto cada uno (fuente: `docs/LOGIN_MANAGER_GUIA_TECNICA.html`):
+
+| Camino | Qué hace | Riesgo |
+|---|---|---|
+| **SQL directo** — un segundo engine de SQLAlchemy apunta a la base `authentik` (mismo Postgres, cambiando el nombre de la base en el `DATABASE_URL`) | Lee `authentik_core_application`, `authentik_core_group`, `authentik_brands_brand` (resolver `client_id`→slug, listar apps, auto-enlazar por grupo, sincronizar Brands); **escribe** `authentik_providers_oauth2_scopemapping` (descripciones de scope) | **El más frágil de los tres.** Sin pasar por la API/ORM de Authentik — una migración interna de Authentik que renombre una columna/tabla rompe esto en producción sin ningún aviso de "API deprecada". Usar solo para lecturas de datos estables; evitar escrituras directas si existe alternativa por API. |
+| **REST API con token** (`AUTHENTIK_API_TOKEN` + `httpx`) | Favicon→Brand nativo, sync de `PasswordPolicy`/`ReputationPolicy`/`PasswordExpiryPolicy`, alta de Brand+grupos vía blueprints | El camino "correcto". Todas estas funciones están diseñadas para **fallar "suave"**: si Authentik no responde, el cambio se guarda igual en la base local y se devuelve `(ok=False, error=...)` como advertencia — nunca se pierde el trabajo del administrador por una caída momentánea de Authentik. |
+| **Webhook entrante** (`POST /api/v1/authentik-event`, secreto compartido en `X-Webhook-Secret`) | Authentik dispara un evento real (alta, login fallido, cambio de contraseña…) → Login Manager elige la plantilla de correo y la envía | Único camino en sentido inverso. El secreto se compara con `secrets.compare_digest` (nunca `==`, evita timing attacks). |
+
+### 1.3.2 Reglas de CSS/responsividad para `flow.html` (4 incidentes reales, no teoría)
+
+Fuente: `docs/LOGIN_MANAGER_GUIA_TECNICA.html` §06-07 y `docs/REPORTE_MEJORAS_UI_AUTHENTIK.md`. Estas
+reglas existen porque ya se rompieron en producción, cada una más de una vez:
+
+- **Nunca ocultar `<p>` genéricos** para limpiar texto redundante (`p:not(.clase){display:none}`) —
+  el mensaje real de error ("contraseña incorrecta") también es un `<p>`, y una regla así de amplia
+  se lo come. Excluye siempre clases de error/alerta explícitamente.
+- **Nunca enumerar pantallas fijas** (`ak-stage-identification, ak-stage-password…`) — la siguiente
+  pantalla nueva que Authentik agregue queda sin marca. Usa selectores por prefijo (`[class^="ak-"]`).
+- **Los breakpoints reales son 920px y 480px, no 768px** — deliberadamente distinto del "estándar"
+  de frameworks como Tailwind/Bootstrap: una laptop de 1366px con escalado de Windows al 200%
+  reporta un viewport efectivo de ~683px y cae en la regla "móvil" sin ser un teléfono, ocultando la
+  columna de logos en escritorio real. Prueba siempre a 1366×768 con zoom/escalado 150-200%.
+- **`body` usa `overflow: auto`, nunca `hidden`**, a propósito — si la altura visible real es menor
+  que los 560px de la tarjeta de login (barra del navegador + taskbar de por medio), sin el scroll
+  el botón de "Iniciar sesión" queda inalcanzable.
+- **Prueba siempre un login que falla** (contraseña incorrecta), no solo el camino feliz — es la
+  única forma de confirmar que el mensaje de error sigue siendo visible después de un cambio.
+- Si algo queda oculto y ninguna regla CSS lo trae de vuelta: busca JS poniendo
+  `style.display = 'none'` con `!important` directo en el elemento — eso le gana a cualquier hoja de
+  estilos, no importa cuántas reglas se agreguen encima.
+- Si editas `custom_authentik.js`: sube el número de versión en `?v=` dentro de
+  `gateway/sites-enabled/subdomains.conf` y `nginx -s reload` — si no, el navegador sigue usando la
+  copia vieja en caché.
 
 ### 1.4 El estándar de auditoría CASMART (aplica a toda tabla transaccional)
 
@@ -145,9 +210,9 @@ para que puedas seguir mejorándolo sin tener que releer todo el código primero
 
 Un panel de administración (backend FastAPI + frontend React) que le permite a un administrador
 diseñar visualmente el tema de login de Authentik (colores, logos, fondo, tipografías, mensajes,
-plantillas de correo) **por tenant y por flow/app**, y lo aplica generando un `login.html` estático
-que Authentik sirve directamente — sin que el navegador del usuario final llame a ninguna API en el
-momento del login real.
+plantillas de correo) **por tenant y por flow/app**, y lo expone a través de una API pública que
+`flow.html` (la plantilla SPA de Authentik, ver §1.3) consulta en vivo en cada carga de página —
+guardar un tema en el panel no "publica" nada, el cambio se ve en el siguiente request.
 
 ### 2.2 Stack técnico
 
@@ -198,9 +263,9 @@ le pasa el hostname real al backend.
 
 | Router | Prefijo | Qué hace |
 |---|---|---|
-| `admin.py` | `/api/v1/themes` (vía `router`) | CRUD de temas, deploy del `login.html` estático, font presets, favicon→Brand de Authentik, descubrimiento de Applications de Authentik, descarga de blueprint |
+| `admin.py` | `/api/v1/themes` (vía `router`) | CRUD de temas, `/deploy` (escribe `flow.html` en el volumen compartido — ver colisión en §1.3), font presets, favicon→Brand de Authentik, descubrimiento de Applications de Authentik, descarga de blueprint, las 3 integraciones de §1.3.1 |
 | `tenant.py` | `/api/v1/tenant` | Resolución de tenant (`/resolve`, `/list`), ajustes de marca (`/settings`), apps enlazadas (`/applications`) |
-| `public.py` | — | Endpoints SIN autenticación, consumidos por el HTML estático ya desplegado (imágenes, fuentes, plantillas de correo públicas) |
+| `public.py` | `/api/v1/public` (prefijo real `/lm/api/v1/public/...` detrás del gateway) | Endpoints SIN autenticación — es lo que `flow.html` consulta EN VIVO en cada carga de página (ver §1.3), no un archivo ya desplegado |
 | `password_policy.py` | — | CRUD de la política + sincronización real con las 3 policies de Authentik mencionadas en §2.4 |
 | `authentik_events.py` | `/api/v1/authentik-event` | Webhook receptor — Authentik llama aquí en cada evento real (alta, login fallido, etc.), dispara el envío de correo correspondiente |
 | `email_sync.py` | — | Sincroniza/despliega plantillas de email hacia Authentik |
@@ -290,10 +355,21 @@ para ver un cambio, no tiene modo dev montado en este `compose.yml`.
 
 ### 2.9 Dónde seguir leyendo
 
-- `README.md` (este repo) — guía de integración con Authentik paso a paso (cómo montar el volumen
-  compartido, cómo configurar el Stage de Authentik para usar `login.html`).
+- `docs/LOGIN_MANAGER_GUIA_TECNICA.html` (este repo, 29-oct-2026) — la fuente más detallada sobre
+  los 3 caminos de integración con Authentik (§1.3.1) y las reglas de CSS/responsividad (§1.3.2).
+  Se mantiene como "documento vivo" — si la arquitectura cambia otra vez, hay que actualizarlo junto
+  con el código, no después (su propia instrucción, al final del archivo).
+- `docs/REPORTE_MEJORAS_UI_AUTHENTIK.md` (este repo) — bitácora de cada bug visual de Authentik ya
+  encontrado y corregido, con su addendum 2026-11-03 sobre la colisión de `custom_authentik.js` en
+  el shadow DOM de `flow.html` (ver §1.3).
+- `docs/ADVANCED_API_CUSTOMIZATION_GUIDE.md` y `docs/EMAIL_SYNC_GUIDE.md` (este repo) — para quien
+  vaya a integrar un cliente externo contra la API de temas/correo, o sincronizar plantillas de
+  email manualmente.
+- `README.md` (este repo) — útil para requisitos y primer arranque; para el mecanismo real de
+  servido del tema (`flow.html` en vivo, no HTML estático), usa §1.3 de este documento.
 - `docs/SECURITY_AUDIT_2026-11-04.md` (este repo) — auditoría completa con hallazgo→severidad→
-  corrección, incluyendo lo que sigue pendiente y por qué.
+  corrección, incluyendo lo que sigue pendiente y por qué. `SECURITY_AUDIT_2026-07.md` es la ronda
+  anterior, ya superada por esta — queda como referencia histórica.
 - §1 de este documento — arquitectura del ecosistema completo (dónde embona este proyecto en el resto).
 - Guía interna de Vault (no versionada en git, pídela al equipo de infraestructura) — si decides
   cerrar el pendiente de §2.7 sobre integrar Vault.
@@ -308,6 +384,15 @@ multi-tenant sin antes leer el porqué — está documentado en su propio códig
 (`routers/tenant.py`/`config.py`) como una decisión explícita: replicar la resolución de tenant por
 header que usa Manager "sería seguridad aparente sin sustento real" en este backend. Usa un
 `DEFAULT_TENANT_ID` fijo en vez de resolver por dominio.
+
+> **Importante, ver §1.3**: el `POST /{flow_slug}/deploy` de este repo escribe al MISMO archivo
+> físico (`flow.html`) que el de Manager — no son pipelines aislados, es una colisión real de
+> último-en-escribir-gana. Además, la copia de `login.html.j2` de ESTE repo tiene, al momento de
+> escribir esto, `API_BASE = '/lm'` hardcodeado — es decir, si Designer despliega, el HTML
+> resultante sigue llamando a la API pública de **Manager**, no a la propia. Si vas a usar o
+> arreglar el `/deploy` de Designer, confirma primero si eso es intencional (¿Designer depende a
+> propósito de los datos de Manager para ese tenant?) o es simplemente una copia desactualizada que
+> nadie ajustó — no está documentado cuál de las dos es.
 
 ### 3.1 Stack técnico
 
@@ -357,5 +442,9 @@ datos y varias dependencias de frontend con Manager:
 
 - `docs/SECURITY_AUDIT_2026-11-04.md` (este repo) — auditoría completa.
 - `docs/ADVANCED_API_CUSTOMIZATION_GUIDE.md` (este repo) — personalización avanzada de la API.
+- `authentik-login-manager/docs/LOGIN_MANAGER_GUIA_TECNICA.html` y
+  `.../REPORTE_MEJORAS_UI_AUTHENTIK.md` — viven solo en el repo de Manager, pero describen
+  `flow.html`, que es EL MISMO archivo que este repo también despliega (ver §3, nota de arriba) —
+  léelos si vas a tocar el `/deploy` de Designer o el CSS de `flow.html` desde este lado.
 - §1-2 de este documento — arquitectura del ecosistema y el detalle completo de Manager (aplica en
-  gran parte a Designer también, por la base de datos compartida).
+  gran parte a Designer también, por la base de datos y el archivo `flow.html` compartidos).
