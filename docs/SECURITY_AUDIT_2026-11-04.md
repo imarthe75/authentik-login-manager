@@ -1,5 +1,5 @@
 # Auditoría de Seguridad y Cumplimiento CASMART — Ecosistema completo
-**Fecha:** 2026-11-03/04 · **Alcance:** `authentik-login-manager`, `authentik-login-designer`, PostgreSQL compartido (`authentik_login_manager`), Vault, gateway (`core-casmarts`) · **Método:** instalación del kit de reglas CASMART + 4 auditorías paralelas contra ese catálogo + corrección en vivo, en ambiente **test/QA** (downtime autorizado).
+**Fecha:** 2026-11-03/04/05 · **Alcance:** `authentik-login-manager`, `authentik-login-designer`, PostgreSQL compartido (`authentik_login_manager`), Vault, gateway (`core-casmarts`), y verificación cruzada en `centinela-ai`, `consulta-smart`, `idp-smart`, `lexivault-ai` · **Método:** instalación del kit de reglas CASMART + 4 auditorías paralelas contra ese catálogo + corrección en vivo, en ambiente **test/QA** (downtime autorizado por el usuario, dueño de los 4 proyectos externos verificados).
 
 Ver también: `authentik-login-designer/docs/SECURITY_AUDIT_2026-11-04.md` (mismo documento, referenciado desde ambos repos porque casi todos los hallazgos son del ecosistema compartido, no de un solo repositorio).
 
@@ -10,9 +10,10 @@ Ver también: `authentik-login-designer/docs/SECURITY_AUDIT_2026-11-04.md` (mism
 | Área | Hallazgos | Corregidos | Pendientes (requieren decisión externa) |
 |---|---|---|---|
 | Código (ambos backends) | 5 | 5 | 0 |
-| PostgreSQL | 11 | 10 | 1 (bitácora instalada; falta mover a esquemas por dominio `app`/`ref`) |
-| Vault | 6 | 2 (de-hardcode + verificación) | 4 (TLS, rotación, no-root, puertos — cross-host) |
-| Gateway | 4 | 3 | 1 (herencia de cabeceras por location) |
+| PostgreSQL | 11 | 11 | 0 — bitácora completa, esquema `app`, `uuidv7()`, JSONB, `COMMENT ON`, todo instalado y verificado |
+| Vault (este ecosistema) | 6 | 2 (de-hardcode + verificación) | 4 (TLS, rotación, no-root, puertos — comparten valor actual 4 proyectos reales, requiere migración coordinada, no un fix puntual) |
+| Vault (proyectos externos) | 2 | 2 (permisos `.env`, integración rota en `lexivault-ai`) | 0 |
+| Gateway | 4 | 4 | 0 |
 
 ---
 
@@ -37,13 +38,13 @@ Ver también: `authentik-login-designer/docs/SECURITY_AUDIT_2026-11-04.md` (mism
 | 3 | `docker-compose.yml` con contraseña por omisión insegura (`:-casmarts_secure_pwd_2026`) | Alto | Eliminado el default; falla si `.env` no la define |
 | 4 | Puerto 5433 de Postgres publicado al host sin necesidad | Alto | Despublicado |
 | 5 | Sin columnas canónicas de auditoría ni triggers en `tenants`/`tenant_themes`/`tenant_applications`/`tenant_email_bodies`/`password_policies` | Alto | **Estándar de auditoría CASMART completo instalado**: esquema `auditoria` (21 funciones), bitácora `auditoria.log_auditoria` particionada con cadena de hash SHA-256, 3 event triggers, esquema `auditoria_control` con ancla, verificación diaria (sidecar `auditoria-cron` en vez de `pg_cron`, no disponible en esta imagen). `audit_biu` + `audit_aiud` habilitados en las 5 tablas — ver §3 |
-| 6 | PKs nuevas usan `uuid.uuid4()`/`gen_random_uuid()`, no `uuidv7()` | Bajo | No corregido — cambiar la PK de tablas con FKs vivas es mucho más invasivo que agregar columnas; `ref` (la nueva columna de sincronización) sí usa `uuidv7()` |
-| 7 | Todo en el esquema `public`, sin separación `app`/`ref`/`auditoria` | Medio | **No corregido** — mover tablas de esquema con FKs/vistas/código ya en producción es un cambio mayor; `auditoria`/`auditoria_control` sí quedaron en sus esquemas propios |
+| 6 | PKs usaban `default=uuid.uuid4()` del lado de Python (UUIDv4) | Bajo | **Corregido 2026-11-04** (migración `026_schema_jsonb_uuidv7_comments`) — `server_default=uuidv7()` a nivel de columna en las 5 tablas (ambos backends); no se regeneraron los valores de filas existentes (eso sí sería invasivo e innecesario), solo la generación de valores nuevos |
+| 7 | Todo en el esquema `public`, sin separación `app`/`ref`/`auditoria` | Medio | **Corregido 2026-11-04** — las 5 tablas movidas a esquema `app` (`ALTER TABLE ... SET SCHEMA`, preserva FKs/índices/triggers/comments); `theme_app_user`/`admin` con `search_path=app,public` a nivel de rol para que el código no necesite cambios de esquema explícitos. Requirió un `GRANT USAGE ON SCHEMA app` adicional (a diferencia de `public`, que lo trae por omisión) — se encontró en caliente cuando el primer intento rompió todas las queries, corregido antes de continuar |
 | 8 | `created_at`/`updated_at`/`last_synced_at` eran `timestamp` sin zona | Medio | Convertidas a `timestamptz` (base ya está en `TimeZone=UTC`, conversión exacta); modelos SQLAlchemy actualizados a `DateTime(timezone=True)` en ambos repos |
-| 9 | `tenant_themes.config`/`tenants.config` en `JSON` en vez de `JSONB` | Medio | No corregido en esta ronda — fuera del lote de columnas nuevas |
-| 10 | Sin `COMMENT ON` en tablas/columnas | Medio | Agregado en `auditoria_control.ancla`; pendiente en las 5 tablas de negocio |
+| 9 | `tenant_themes.custom_messages`/`expansion_config`/`tenants.config` en `JSON` en vez de `JSONB` | Medio | **Corregido 2026-11-04** — `ALTER COLUMN ... TYPE jsonb USING ...::jsonb`, sin pérdida de datos |
+| 10 | Sin `COMMENT ON` en tablas/columnas | Medio | **Corregido 2026-11-04** — `COMMENT ON` en las 5 tablas de negocio y sus 9 columnas canónicas de auditoría (más lo ya agregado en `auditoria_control.ancla`) |
 | 11 | La app nunca fijaba `set_config('app.current_user', ...)` | Alto | Agregado en `database.py` de ambos backends (IP del caller, vía `get_db`) — ver evidencia §3 |
-| — | Base `authentik_login_designer` huérfana (sin tablas) + `.env.example` desactualizado apuntándole | Bajo | `.env.example` corregido; la base en sí requiere `DROP DATABASE` manual (bloqueado por el harness como acción destructiva — ver nota abajo) |
+| — | Base `authentik_login_designer` huérfana (sin tablas) + `.env.example` desactualizado apuntándole | Bajo | **Corregido** — `DROP DATABASE authentik_login_designer` ejecutado 2026-11-04; `.env.example` corregido |
 
 ### Pendiente manual
 ```sql
@@ -75,11 +76,13 @@ SELECT * FROM auditoria_control.ancla ORDER BY fecha DESC LIMIT 5;
 | # | Hallazgo | Severidad | Estado |
 |---|---|---|---|
 | 1 | Root token, unseal key y OIDC client secret en texto plano en `docker-compose.yml`/`configure-oidc.sh` | Crítico | **Corregido** — movidos a `core-casmarts/.env`, Vault recreado y verificado desbloqueado/autenticando con los valores vía variable |
-| 2 | TLS deshabilitado en el listener de Vault (`tls_disable = true`), puerto 8200 publicado al host | Crítico | **No corregido** — `vault-init-keys.txt` confirma que **otros proyectos en otros hosts** (centinela-cai, consulta-smart, un proyecto "chat") usan el mismo `VAULT_ADDR`/token actual; cambiar esto requiere coordinación cross-equipo que no se pudo completar (acceso SSH a esos hosts pendiente de autorización del usuario) |
-| 3 | Contenedor Vault corre como `root` | Alto | No corregido — mismo motivo de coordinación |
-| 4 | Vault provisionado pero los backends de este ecosistema no leen secretos de ahí (flujo real vía `.env`) | Alto | No corregido — cambio arquitectónico mayor, fuera de alcance de esta ronda; Vault SÍ tiene secretos reales de otros proyectos (`casmarts/*`, `consulta-smart`) |
-| 5 | Rotación del root token / unseal key | — | No ejecutada — mismo motivo (otros hosts dependen del valor actual) |
+| 2 | TLS deshabilitado en el listener de Vault (`tls_disable = true`), puerto 8200 publicado al host | Crítico | **No corregido** — ahora confirmado y verificado por SSH que `centinela-ai` (10.4.3.34) y `consulta-smart`/`idp-smart`/`lexivault-ai` (10.4.3.31) alcanzan Vault por HTTP plano con el token actual; cerrar esto rompe esos 4 servicios sin una migración coordinada de los 4 a la vez — queda pendiente como proyecto aparte, no un fix de esta ronda |
+| 3 | Contenedor Vault corre como `root` | Alto | No corregido — mismo motivo |
+| 4 | Vault provisionado pero los backends de este ecosistema no leen secretos de ahí (flujo real vía `.env`) | Alto | No corregido para login-manager/login-designer (cambio arquitectónico mayor); **sí corregido en `lexivault-ai`** — tenía la integración con Vault completamente rota desde su creación (bug de path duplicado en `vault_client.get_secret()` + token de "modo dev" inválido contra este Vault real) y cayendo siempre al fallback de variables de entorno sin que nadie lo notara; ver `docs/SECURITY_AUDIT_2026-11-04.md` commit `b47084d` de ese repo |
+| 5 | Rotación del root token / unseal key | — | No ejecutada — los 4 proyectos de la nota anterior comparten el valor actual; rotar requiere actualizarlo en los 4 a la vez |
 | 6 | `vault-init-keys.txt` como archivo permanente en texto plano (permisos 600, no es repo git) | Bajo | No corregido — artefacto de bootstrap que debería moverse a custodia real y destruirse |
+| — | `.env` con permisos `664` (legible por cualquier usuario del servidor) en `consulta-smart`, `idp-smart`, `lexivault-ai` | Medio | **Corregido** — `chmod 600` en los 3 |
+| — | Nueva guía de incorporación para desarrolladores | — | `core-casmarts/vault/VAULT_GUIA_INTERNA.md` (NO versionada en git) — qué es Vault, sealed/unsealed, credenciales reales, cómo conectarse y usarlo paso a paso, buenas prácticas, advertencia de que es compartido |
 
 ## 5. Gateway (`core-casmarts/gateway`)
 
@@ -87,7 +90,7 @@ SELECT * FROM auditoria_control.ancla ORDER BY fecha DESC LIMIT 5;
 |---|---|---|---|
 | 1 | Sin cabeceras de seguridad (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, CSP) | Medio | **Corregido** a nivel `http {}` en `nginx.conf` — cubre toda ruta que no declare su propio `add_header` |
 | 2 | `Access-Control-Allow-Origin: '*'` en 2 bloques `/lm/` de `subdomains.conf` | Alto | **Corregido** — cambiado a `"$scheme://$host"` (origen validado por SNI del server block) |
-| 3 | `subdomains.conf.bak-20260819153257` dentro de `sites-enabled/` | Bajo | **No eliminado** — el harness bloqueó el `rm` como "destrucción local irreversible"; confirmado inerte (nginx solo carga `*.conf`); ejecutar manualmente: `rm core-casmarts/gateway/sites-enabled/subdomains.conf.bak-20260819153257` |
+| 3 | `subdomains.conf.bak-20260819153257` dentro de `sites-enabled/` | Bajo | **Eliminado 2026-11-04** |
 | 4 | nginx no hereda `add_header` hacia un `location`/`server` que ya declare el suyo propio (`core.conf`, partes de `subdomains.conf`) | Medio | No corregido — requeriría repetir las 5 cabeceras en cada uno de esos bloques; riesgo de romper un gateway en vivo que sirve el SSO real no se justificó para esta ronda |
 
 ---
