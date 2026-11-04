@@ -1,4 +1,4 @@
-FROM node:18-alpine AS build
+FROM node:20.20.2-alpine AS build
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 
-FROM nginx:alpine
+FROM nginx:1.31.8-alpine
 
 RUN rm /etc/nginx/conf.d/default.conf
 
