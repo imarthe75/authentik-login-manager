@@ -15,6 +15,14 @@ Crea un archivo `.env` en la raíz de `authentik-login-manager/` (basado en `.en
 cp .env.example .env
 ```
 
+> **Seguridad (2026-11-04):** `POSTGRES_USER`/`DATABASE_URL` deben usar un rol de DML acotado
+> a la base `authentik_login_manager` (ej. `theme_app_user`), **nunca** el superusuario `admin`
+> que también usa Authentik — ver `docs/SECURITY_AUDIT_2026-11-04.md` y `rules/postgres/rules.md`
+> del kit CASMARTS en la raíz del ecosistema. La base ahora tiene el Estándar de auditoría CASMART
+> instalado (columnas canónicas + bitácora con cadena de hash) en `tenants`, `tenant_themes`,
+> `tenant_applications`, `tenant_email_bodies` y `password_policies` — ver §3 de ese documento
+> para las consultas de verificación.
+
 ### 2. Primer Arranque con Docker Compose
 Dado que este proyecto está diseñado para ejecutarse dentro del ecosistema **CASMARTS**, se conecta a la red externa existente `casmarts_network`.
 

@@ -1,4 +1,5 @@
 import logging
+import re
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -67,14 +68,28 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
     return response
 
+# Nombres de campo que nunca se escriben en el log, sin importar su longitud
+# (contraseña, token, secreto, llave) — el filtro por longitud de abajo no
+# protege un secreto corto (STD-STRIDE-LOG-SENSITIVE-DATA).
+_SENSITIVE_FIELD_RE = re.compile(
+    r"(password|passwd|secret|token|api[_-]?key|admin[_-]?key|authorization|client[_-]?secret)",
+    re.IGNORECASE,
+)
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     try:
         body = await request.body()
         import json as _json
         parsed = _json.loads(body)
-        # Log only non-binary fields to avoid huge base64 dumps
-        safe = {k: v for k, v in parsed.items() if not isinstance(v, str) or len(v) < 200}
+        # Log only non-binary, non-sensitive fields to avoid huge base64 dumps
+        # and to never write a credential to the application log.
+        safe = {
+            k: ("***redacted***" if _SENSITIVE_FIELD_RE.search(k) else v)
+            for k, v in parsed.items()
+            if not isinstance(v, str) or len(v) < 200
+        }
         logger.error("422 on %s %s | errors=%s | body_safe=%s",
                      request.method, request.url.path, exc.errors(), safe)
     except Exception:

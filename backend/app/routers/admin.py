@@ -2042,7 +2042,7 @@ async def _sync_tenants_from_authentik(db: AsyncSession) -> None:
         log.error(f"Error syncing tenants from Authentik: {e}")
 
 
-@tenant_router.get("/list")
+@tenant_router.get("/list", dependencies=[Depends(verify_admin_key)])
 async def list_available_tenants(db: AsyncSession = Depends(get_db)):
     """
     Lista todos los tenants activos disponibles.
@@ -2142,7 +2142,7 @@ entries:
 """
 
 
-@router.get("/blueprint/download")
+@router.get("/blueprint/download", dependencies=[Depends(verify_admin_key)])
 async def download_brand_blueprint(
     brand_name: str = Query(..., description="Nombre de la marca/brand"),
     domain: str = Query(..., description="Dominio de la marca")
